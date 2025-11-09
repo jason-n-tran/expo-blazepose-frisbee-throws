@@ -5,8 +5,8 @@
  * and preparing video data for pose detection.
  */
 
-import { Video, ResizeMode } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
+import { Audio } from 'expo-av';
+import { getInfoAsync } from 'expo-file-system/legacy';
 import { VideoFrame, ValidationResult, AnalysisError, AnalysisErrorType } from '@/types/pose';
 
 export class VideoProcessingService {
@@ -80,29 +80,44 @@ export class VideoProcessingService {
    * @returns Duration in seconds
    */
   async getVideoDuration(videoUri: string): Promise<number> {
+    console.log('[VideoProcessingService] getVideoDuration called with URI:', videoUri);
+    
     try {
       // Check if file exists
-      const fileInfo = await FileSystem.getInfoAsync(videoUri);
+      console.log('[VideoProcessingService] Checking if file exists...');
+      const fileInfo = await getInfoAsync(videoUri);
+      console.log('[VideoProcessingService] File info:', JSON.stringify(fileInfo, null, 2));
+      
       if (!fileInfo.exists) {
+        console.error('[VideoProcessingService] File does not exist!');
         throw new Error('Video file not found');
       }
 
-      // Create a video component to get duration
-      // Note: In React Native, we need to load the video to get its duration
-      // This is a simplified approach - actual implementation would use expo-video
+      // Use expo-av Audio.Sound to load video and get duration
+      // Sound can load video files and extract their duration
+      console.log('[VideoProcessingService] Creating Audio.Sound to load video...');
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: videoUri },
+        { shouldPlay: false }
+      );
       
-      return new Promise((resolve, reject) => {
-        // Placeholder: In actual implementation, we would:
-        // 1. Create a Video component
-        // 2. Load the video
-        // 3. Get duration from status
-        // 4. Clean up
-        
-        // For now, return a default value
-        // This will be replaced with actual video loading logic
-        resolve(30); // Default 30 seconds
-      });
+      console.log('[VideoProcessingService] Getting sound status...');
+      const status = await sound.getStatusAsync();
+      console.log('[VideoProcessingService] Sound status:', JSON.stringify(status, null, 2));
+      
+      await sound.unloadAsync();
+      console.log('[VideoProcessingService] Sound unloaded');
+      
+      if (status.isLoaded && status.durationMillis) {
+        const durationSeconds = status.durationMillis / 1000;
+        console.log('[VideoProcessingService] Video duration:', durationSeconds, 'seconds');
+        return durationSeconds;
+      } else {
+        console.error('[VideoProcessingService] Could not load video or get duration. Status:', status);
+        throw new Error('Could not load video or get duration');
+      }
     } catch (error) {
+      console.error('[VideoProcessingService] Error in getVideoDuration:', error);
       throw new AnalysisError(
         AnalysisErrorType.VIDEO_LOAD_FAILED,
         `Failed to get video duration: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -117,10 +132,16 @@ export class VideoProcessingService {
    * @returns Validation result with duration if valid
    */
   async validateVideo(videoUri: string): Promise<ValidationResult> {
+    console.log('[VideoProcessingService] validateVideo called with URI:', videoUri);
+    
     try {
       // Check if file exists
-      const fileInfo = await FileSystem.getInfoAsync(videoUri);
+      console.log('[VideoProcessingService] Checking if file exists...');
+      const fileInfo = await getInfoAsync(videoUri);
+      console.log('[VideoProcessingService] File info:', JSON.stringify(fileInfo, null, 2));
+      
       if (!fileInfo.exists) {
+        console.error('[VideoProcessingService] File does not exist!');
         throw new AnalysisError(
           AnalysisErrorType.VIDEO_LOAD_FAILED,
           'Video file not found',
@@ -130,6 +151,7 @@ export class VideoProcessingService {
 
       // Check if file is readable
       if (!fileInfo.isDirectory && fileInfo.size === 0) {
+        console.error('[VideoProcessingService] File is empty!');
         throw new AnalysisError(
           AnalysisErrorType.VIDEO_CORRUPTED,
           'Video file is empty or corrupted',
@@ -139,7 +161,10 @@ export class VideoProcessingService {
 
       // Check file format
       const extension = videoUri.split('.').pop()?.toLowerCase();
+      console.log('[VideoProcessingService] File extension:', extension);
+      
       if (!extension || !VideoProcessingService.SUPPORTED_FORMATS.includes(extension)) {
+        console.error('[VideoProcessingService] Unsupported format:', extension);
         throw new AnalysisError(
           AnalysisErrorType.VIDEO_INVALID_FORMAT,
           `Unsupported video format. Supported formats: ${VideoProcessingService.SUPPORTED_FORMATS.join(', ')}`,
@@ -150,8 +175,11 @@ export class VideoProcessingService {
       // Get video duration
       let duration: number;
       try {
+        console.log('[VideoProcessingService] Getting video duration...');
         duration = await this.getVideoDuration(videoUri);
+        console.log('[VideoProcessingService] Duration retrieved:', duration);
       } catch (error) {
+        console.error('[VideoProcessingService] Error getting duration:', error);
         throw new AnalysisError(
           AnalysisErrorType.VIDEO_CORRUPTED,
           'Unable to read video file. The file may be corrupted.',
@@ -161,6 +189,7 @@ export class VideoProcessingService {
 
       // Check duration
       if (duration > VideoProcessingService.MAX_VIDEO_DURATION) {
+        console.error('[VideoProcessingService] Video too long:', duration);
         throw new AnalysisError(
           AnalysisErrorType.VIDEO_TOO_LONG,
           `Video is too long (${Math.round(duration)}s). Maximum duration is ${VideoProcessingService.MAX_VIDEO_DURATION}s`,
@@ -170,6 +199,7 @@ export class VideoProcessingService {
 
       // Check minimum duration (at least 1 second)
       if (duration < 1) {
+        console.error('[VideoProcessingService] Video too short:', duration);
         throw new AnalysisError(
           AnalysisErrorType.VIDEO_LOAD_FAILED,
           'Video is too short. Please select a video at least 1 second long.',
@@ -177,11 +207,14 @@ export class VideoProcessingService {
         );
       }
 
+      console.log('[VideoProcessingService] Video validation successful!');
       return {
         isValid: true,
         duration,
       };
     } catch (error) {
+      console.error('[VideoProcessingService] Validation error:', error);
+      
       if (error instanceof AnalysisError) {
         return {
           isValid: false,

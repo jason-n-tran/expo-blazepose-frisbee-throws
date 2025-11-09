@@ -1,22 +1,11 @@
 /**
  * ErrorDialog Component
  * 
- * Displays user-friendly error messages with retry options using Gluestack UI AlertDialog
+ * Displays user-friendly error messages with retry options using React Native Modal
  */
 
 import React from 'react';
-import {
-  AlertDialog,
-  AlertDialogBackdrop,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogBody,
-  AlertDialogFooter,
-  Button,
-  ButtonText,
-  Heading,
-  Text,
-} from '@/components/ui';
+import { View, Text, Modal, Pressable } from 'react-native';
 import { AnalysisError } from '@/types/errors';
 
 interface ErrorDialogProps {
@@ -43,46 +32,54 @@ export function ErrorDialog({
   const canRetry = isAnalysisError ? error.recoverable : true;
 
   return (
-    <AlertDialog isOpen={isOpen} onClose={onClose}>
-      <AlertDialogBackdrop />
-      <AlertDialogContent className="bg-white dark:bg-gray-900">
-        <AlertDialogHeader>
-          <Heading size="lg" className="text-gray-900 dark:text-white">
+    <Modal
+      visible={isOpen}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View className="flex-1 bg-black/50 items-center justify-center p-6">
+        <View className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-full max-w-md">
+          {/* Header */}
+          <Text className="text-gray-900 dark:text-white text-xl font-bold mb-4">
             {title}
-          </Heading>
-        </AlertDialogHeader>
-        
-        <AlertDialogBody>
-          <Text className="text-gray-700 dark:text-gray-300 mb-3">
+          </Text>
+          
+          {/* Body */}
+          <Text className="text-gray-700 dark:text-gray-300 text-base mb-3">
             {message}
           </Text>
-          <Text className="text-gray-600 dark:text-gray-400 text-sm">
+          <Text className="text-gray-600 dark:text-gray-400 text-sm mb-6">
             {suggestion}
           </Text>
-        </AlertDialogBody>
-        
-        <AlertDialogFooter className="flex-row gap-3">
-          <Button
-            variant="outline"
-            onPress={onClose}
-            className="flex-1"
-          >
-            <ButtonText>Close</ButtonText>
-          </Button>
           
-          {showRetry && canRetry && onRetry && (
-            <Button
-              onPress={() => {
-                onClose();
-                onRetry();
-              }}
-              className="flex-1"
+          {/* Footer */}
+          <View className="flex-row gap-3">
+            <Pressable
+              onPress={onClose}
+              className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-lg py-3 items-center"
             >
-              <ButtonText>Retry</ButtonText>
-            </Button>
-          )}
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+              <Text className="text-gray-900 dark:text-white font-semibold">
+                Close
+              </Text>
+            </Pressable>
+            
+            {showRetry && canRetry && onRetry && (
+              <Pressable
+                onPress={() => {
+                  onClose();
+                  onRetry();
+                }}
+                className="flex-1 bg-blue-600 rounded-lg py-3 items-center"
+              >
+                <Text className="text-white font-semibold">
+                  Retry
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }

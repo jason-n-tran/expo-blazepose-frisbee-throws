@@ -13,8 +13,11 @@ export default function App() {
             screenOptions={{
               headerBackTitle: 'Back'
             }}
+            initialRouteName="analysis"
           >
+            <Stack.Screen name="analysis" options={{ headerShown: false }}/>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }}/>
+            <Stack.Screen name="MediaViewer" options={{ headerShown: false }}/>
           </Stack>
         </GestureHandlerRootView>
       </GluestackUIProvider>

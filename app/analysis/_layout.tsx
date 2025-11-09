@@ -6,12 +6,16 @@ export default function AnalysisLayout() {
       screenOptions={{
         headerShown: true,
         headerBackTitle: 'Back',
+        headerStyle: {
+          backgroundColor: '#000',
+        },
+        headerTintColor: '#fff',
       }}
     >
       <Stack.Screen
         name="input-selection"
         options={{
-          title: 'Analyze Your Throw',
+          title: 'Analysis',
           headerShown: true,
         }}
       />

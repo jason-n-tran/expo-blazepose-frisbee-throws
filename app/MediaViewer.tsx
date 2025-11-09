@@ -17,14 +17,23 @@ const requestSavePermission = async (): Promise<boolean> => {
 }
 
 export default function MediaViewer(): React.ReactElement {
-  const params = useLocalSearchParams<{ path: string; type: 'photo' | 'video' }>()
+  const params = useLocalSearchParams<{ path: string; type: 'photo' | 'video'; fromAnalysis?: string }>()
   const path = params.path as string
   const type = params.type as 'photo' | 'video'
+  const fromAnalysis = params.fromAnalysis === 'true'
   const router = useRouter()
   const isForeground = useIsForeground()
   const isScreenFocused = useIsFocused()
   const isVideoPaused = !isForeground || !isScreenFocused
   const [savingState, setSavingState] = useState<'none' | 'saving' | 'saved'>('none')
+
+  React.useEffect(() => {
+    console.log('[MediaViewer] Component mounted/updated');
+    console.log('[MediaViewer] Path:', path);
+    console.log('[MediaViewer] Type:', type);
+    console.log('[MediaViewer] From Analysis:', fromAnalysis);
+    console.log('[MediaViewer] Should show analyze button:', fromAnalysis && type === 'video');
+  }, [path, type, fromAnalysis])
 
   const source = useMemo(() => (path ? `file://${path}` : ''), [path])
   
@@ -64,6 +73,17 @@ export default function MediaViewer(): React.ReactElement {
       Alert.alert('Failed to save!', `An unexpected error occured while trying to save your ${type}. ${message}`)
     }
   }, [path, type])
+
+  const onAnalyzePressed = useCallback(() => {
+    console.log('[MediaViewer] Analyze button pressed');
+    console.log('[MediaViewer] Video path:', path);
+    console.log('[MediaViewer] Navigating to processing with URI:', `file://${path}`);
+    
+    router.push({
+      pathname: '/analysis/processing',
+      params: { videoUri: `file://${path}` }
+    })
+  }, [path, router])
 
   React.useEffect(() => {
     if (type === 'video' && player) {
@@ -116,6 +136,12 @@ export default function MediaViewer(): React.ReactElement {
         {savingState === 'saving' && <ActivityIndicator color="white" />}
       </PressableOpacity>
 
+      {fromAnalysis && type === 'video' && (
+        <PressableOpacity style={styles.analyzeButton} onPress={onAnalyzePressed}>
+          <IonIcon name="analytics" size={35} color="white" style={styles.icon} />
+        </PressableOpacity>
+      )}
+
       <StatusBarBlurBackground />
     </View>
   )
@@ -139,6 +165,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: SAFE_AREA_PADDING.paddingBottom,
     left: SAFE_AREA_PADDING.paddingLeft,
+    width: 40,
+    height: 40,
+  },
+  analyzeButton: {
+    position: 'absolute',
+    bottom: SAFE_AREA_PADDING.paddingBottom,
+    right: SAFE_AREA_PADDING.paddingRight,
     width: 40,
     height: 40,
   },

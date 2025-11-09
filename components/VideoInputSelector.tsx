@@ -16,8 +16,8 @@ export function VideoInputSelector({ onRecordPressed, onSelectPressed }: VideoIn
     if (onRecordPressed) {
       onRecordPressed();
     } else {
-      // Navigate to camera screen (tab index 0)
-      router.push('/');
+      // Navigate to camera tab and mark that we're coming from analysis
+      router.push('/(tabs)');
     }
   };
 

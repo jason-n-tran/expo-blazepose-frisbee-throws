@@ -21,6 +21,10 @@ export default function ProcessingScreen() {
   const params = useLocalSearchParams<{ videoUri: string }>();
   const videoUri = params.videoUri;
 
+  console.log('[ProcessingScreen] Component mounted');
+  console.log('[ProcessingScreen] Params:', JSON.stringify(params));
+  console.log('[ProcessingScreen] Video URI:', videoUri);
+
   const [progress, setProgress] = useState(0);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [totalFrames, setTotalFrames] = useState(0);
@@ -35,11 +39,15 @@ export default function ProcessingScreen() {
   const startTime = useRef<number>(Date.now());
 
   useEffect(() => {
+    console.log('[ProcessingScreen] useEffect triggered');
+    
     if (!videoUri) {
+      console.error('[ProcessingScreen] No video URI provided!');
       setError('No video selected');
       return;
     }
 
+    console.log('[ProcessingScreen] Starting video processing...');
     processVideo();
 
     // Cleanup on unmount
@@ -49,18 +57,26 @@ export default function ProcessingScreen() {
   }, [videoUri]);
 
   const processVideo = async () => {
+    console.log('[ProcessingScreen] processVideo called');
+    
     try {
       // Initialize pose detection service
+      console.log('[ProcessingScreen] Initializing pose detection service...');
       setIsInitializing(true);
       try {
         await poseDetectionService.current.initialize();
+        console.log('[ProcessingScreen] Pose detection service initialized');
       } catch (err) {
+        console.error('[ProcessingScreen] Error initializing pose detection:', err);
+        
         // Try offline model as fallback if network error
         if (err instanceof AnalysisError && err.type === AnalysisErrorType.NETWORK_ERROR) {
-          console.log('Attempting to use offline model...');
+          console.log('[ProcessingScreen] Attempting to use offline model...');
           try {
             await poseDetectionService.current.initialize(true);
+            console.log('[ProcessingScreen] Offline model initialized');
           } catch (offlineErr) {
+            console.error('[ProcessingScreen] Offline model failed:', offlineErr);
             throw err; // Throw original network error
           }
         } else {
@@ -70,8 +86,12 @@ export default function ProcessingScreen() {
       setIsInitializing(false);
 
       // Get video duration to estimate total frames
+      console.log('[ProcessingScreen] Getting video duration...');
       const duration = await videoProcessingService.current.getVideoDuration(videoUri);
+      console.log('[ProcessingScreen] Video duration:', duration);
+      
       const estimatedFrames = Math.floor(duration * 10); // 10 FPS
+      console.log('[ProcessingScreen] Estimated frames:', estimatedFrames);
       setTotalFrames(estimatedFrames);
 
       // Process video with progress tracking

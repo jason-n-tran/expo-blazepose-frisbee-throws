@@ -25,7 +25,7 @@ import MaterialIcon from '@expo/vector-icons/MaterialIcons'
 import IonIcon from '@expo/vector-icons/Ionicons'
 import { useIsFocused } from '@react-navigation/core'
 import { usePreferredCameraDevice } from '@/hooks/usePreferredCameraDevice'
-import { useRouter } from 'expo-router'
+import { useRouter, useLocalSearchParams } from 'expo-router'
 
 
 const ReanimatedCamera = Reanimated.createAnimatedComponent(Camera)
@@ -37,9 +37,10 @@ const SCALE_FULL_ZOOM = 3
 
 export default function CameraPage(): React.ReactElement {
   const router = useRouter()
+  const params = useLocalSearchParams<{ forAnalysis?: string }>()
   const camera = useRef<Camera>(null)
   const [isCameraInitialized, setIsCameraInitialized] = useState(false)
-  const [recordingStartTime, setRecordingStartTime] = useState<number | null>(null)
+  const [isForAnalysis, setIsForAnalysis] = useState(false)
   const microphone = useMicrophonePermission()
   const location = useLocationPermission()
   const zoom = useSharedValue(1)
@@ -49,11 +50,21 @@ export default function CameraPage(): React.ReactElement {
   const isFocussed = useIsFocused()
   const isForeground = useIsForeground()
   const isActive = isFocussed && isForeground
-  
-  // Callback when recording starts
-  const handleRecordingStart = useCallback(() => {
-    setRecordingStartTime(Date.now())
-  }, [])
+
+  // Update isForAnalysis when params change
+  React.useEffect(() => {
+    console.log('[CameraPage] Component mounted/updated');
+    console.log('[CameraPage] Params:', JSON.stringify(params));
+    
+    if (params.forAnalysis === 'true') {
+      console.log('[CameraPage] Setting isForAnalysis to true');
+      setIsForAnalysis(true);
+    }
+  }, [params])
+
+  React.useEffect(() => {
+    console.log('[CameraPage] Is for analysis:', isForAnalysis);
+  }, [isForAnalysis])
 
   // Check camera permission status
   const cameraPermissionStatus = Camera.getCameraPermissionStatus()
@@ -119,38 +130,27 @@ export default function CameraPage(): React.ReactElement {
   }, [])
   const onMediaCaptured = useCallback(
     (media: PhotoFile | VideoFile, type: 'photo' | 'video') => {
-      console.log(`Media captured! ${JSON.stringify(media)}`)
+      console.log('[CameraPage] Media captured!', JSON.stringify(media));
+      console.log('[CameraPage] Media type:', type);
+      console.log('[CameraPage] Is for analysis:', isForAnalysis);
       
-      // Check if this is a video for analysis (recorded from analysis flow)
-      if (type === 'video' && recordingStartTime) {
-        const duration = (Date.now() - recordingStartTime) / 1000; // duration in seconds
-        
-        // Validate video duration (max 60 seconds)
-        if (duration > 60) {
-          Alert.alert(
-            'Video Too Long',
-            'Videos for analysis must be 60 seconds or shorter. Please record a shorter video.',
-            [{ text: 'OK' }]
-          );
-          setRecordingStartTime(null);
-          return;
-        }
-        
-        // Navigate to processing screen for analysis
-        router.push({
-          pathname: '/analysis/processing',
-          params: { videoUri: `file://${media.path}` }
-        });
-        setRecordingStartTime(null);
-      } else {
-        // Normal flow - go to media viewer
-        router.push({
-          pathname: '/MediaViewer',
-          params: { path: media.path, type },
-        })
+      // Always go to media viewer first, but mark if it's from analysis flow
+      router.push({
+        pathname: '/MediaViewer',
+        params: { 
+          path: media.path, 
+          type,
+          fromAnalysis: isForAnalysis ? 'true' : 'false'
+        },
+      })
+      
+      // Reset the flag after navigation
+      if (isForAnalysis) {
+        console.log('[CameraPage] Resetting isForAnalysis flag');
+        setIsForAnalysis(false);
       }
     },
-    [router, recordingStartTime],
+    [router, isForAnalysis],
   )
   const onFlipCameraPressed = useCallback(() => {
     setCameraPosition((p) => (p === 'back' ? 'front' : 'back'))
@@ -293,7 +293,6 @@ export default function CameraPage(): React.ReactElement {
         flash={supportsFlash ? flash : 'off'}
         enabled={isCameraInitialized && isActive}
         setIsPressingButton={setIsPressingButton}
-        onRecordingStart={handleRecordingStart}
       />
 
       <StatusBarBlurBackground />

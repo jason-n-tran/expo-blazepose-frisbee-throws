@@ -24,10 +24,7 @@ const STORAGE_KEYS = {
   USER_PREFERENCES: 'user_preferences',
 } as const;
 
-/**
- * MMKV storage instance
- */
-const storage = new MMKV();
+
 
 /**
  * StorageService class for data persistence
@@ -37,6 +34,15 @@ export class StorageService {
    * Minimum free storage space required (in bytes) - 100MB
    */
   private static readonly MIN_FREE_STORAGE = 100 * 1024 * 1024;
+
+  /**
+   * MMKV storage instance
+   */
+  private storage: MMKV;
+
+  constructor() {
+    this.storage = new MMKV();
+  }
 
   /**
    * Check available storage space
@@ -96,7 +102,7 @@ export class StorageService {
       history.push(storedAnalysis);
       
       // Save updated history
-      storage.set(STORAGE_KEYS.ANALYSIS_HISTORY, JSON.stringify(history));
+      this.storage.set(STORAGE_KEYS.ANALYSIS_HISTORY, JSON.stringify(history));
       
       return report.id;
     } catch (error) {
@@ -116,7 +122,7 @@ export class StorageService {
    * @returns Array of stored analyses
    */
   async getAnalysisHistory(): Promise<StoredAnalysis[]> {
-    const historyJson = storage.getString(STORAGE_KEYS.ANALYSIS_HISTORY);
+    const historyJson = this.storage.getString(STORAGE_KEYS.ANALYSIS_HISTORY);
     
     if (!historyJson) {
       return [];
@@ -149,7 +155,7 @@ export class StorageService {
   async deleteAnalysis(id: string): Promise<void> {
     const history = await this.getAnalysisHistory();
     const filteredHistory = history.filter((item) => item.id !== id);
-    storage.set(STORAGE_KEYS.ANALYSIS_HISTORY, JSON.stringify(filteredHistory));
+    this.storage.set(STORAGE_KEYS.ANALYSIS_HISTORY, JSON.stringify(filteredHistory));
   }
 
   /**
@@ -158,7 +164,7 @@ export class StorageService {
    */
   async getGoldStandardData(): Promise<GoldStandardData> {
     // Check if gold standard data exists in storage
-    const storedData = storage.getString(STORAGE_KEYS.GOLD_STANDARD);
+    const storedData = this.storage.getString(STORAGE_KEYS.GOLD_STANDARD);
     
     if (storedData) {
       try {
@@ -242,6 +248,6 @@ export class StorageService {
    * @param data Gold standard data to store
    */
   async setGoldStandardData(data: GoldStandardData): Promise<void> {
-    storage.set(STORAGE_KEYS.GOLD_STANDARD, JSON.stringify(data));
+    this.storage.set(STORAGE_KEYS.GOLD_STANDARD, JSON.stringify(data));
   }
 }

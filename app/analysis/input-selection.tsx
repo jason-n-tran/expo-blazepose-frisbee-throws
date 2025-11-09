@@ -14,15 +14,31 @@ export default function InputSelectionScreen() {
 
   const videoProcessingService = new VideoProcessingService();
 
+  const handleRecordVideo = () => {
+    // Navigate to camera tab with analysis flag
+    router.push({
+      pathname: '/(tabs)',
+      params: { forAnalysis: 'true' }
+    });
+  };
+
   const handleSelectVideo = async () => {
-    if (isSelecting) return;
+    console.log('[InputSelection] handleSelectVideo called');
+    
+    if (isSelecting) {
+      console.log('[InputSelection] Already selecting, returning');
+      return;
+    }
     
     setIsSelecting(true);
     try {
       // Request media library permissions
+      console.log('[InputSelection] Requesting media library permissions...');
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      console.log('[InputSelection] Permission status:', status);
       
       if (status !== 'granted') {
+        console.error('[InputSelection] Permission denied');
         setError(new AnalysisError(
           AnalysisErrorType.INSUFFICIENT_STORAGE,
           'Media library permission is required to select videos.',
@@ -33,6 +49,7 @@ export default function InputSelectionScreen() {
       }
 
       // Launch image picker with video filter
+      console.log('[InputSelection] Launching image picker...');
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['videos'],
         allowsEditing: false,
@@ -40,14 +57,22 @@ export default function InputSelectionScreen() {
         videoMaxDuration: 60, // 60 seconds max
       });
 
+      console.log('[InputSelection] Image picker result:', JSON.stringify(result, null, 2));
+
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const video = result.assets[0];
         const uri = video.uri;
+        console.log('[InputSelection] Selected video URI:', uri);
+        console.log('[InputSelection] Video details:', JSON.stringify(video, null, 2));
 
         // Validate video using VideoProcessingService
+        console.log('[InputSelection] Validating video...');
         const validation = await videoProcessingService.validateVideo(uri);
+        console.log('[InputSelection] Validation result:', JSON.stringify(validation, null, 2));
         
         if (!validation.isValid) {
+          console.error('[InputSelection] Video validation failed:', validation.error);
+          
           // Determine error type based on validation error
           let errorType = AnalysisErrorType.VIDEO_LOAD_FAILED;
           if (validation.error?.includes('format')) {
@@ -68,13 +93,16 @@ export default function InputSelectionScreen() {
         }
 
         // Navigate to processing screen with video URI
+        console.log('[InputSelection] Navigating to processing screen with URI:', uri);
         router.push({
           pathname: '/analysis/processing',
           params: { videoUri: uri }
         });
+      } else {
+        console.log('[InputSelection] User canceled or no video selected');
       }
     } catch (error) {
-      console.error('Error selecting video:', error);
+      console.error('[InputSelection] Error selecting video:', error);
       
       if (error instanceof AnalysisError) {
         setError(error);
@@ -87,6 +115,7 @@ export default function InputSelectionScreen() {
       }
       setShowErrorDialog(true);
     } finally {
+      console.log('[InputSelection] Setting isSelecting to false');
       setIsSelecting(false);
     }
   };
@@ -102,7 +131,10 @@ export default function InputSelectionScreen() {
 
   return (
     <>
-      <VideoInputSelector onSelectPressed={handleSelectVideo} />
+      <VideoInputSelector 
+        onRecordPressed={handleRecordVideo}
+        onSelectPressed={handleSelectVideo} 
+      />
       
       <ErrorDialog
         isOpen={showErrorDialog}

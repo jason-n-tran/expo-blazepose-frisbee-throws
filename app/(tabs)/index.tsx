@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useRef, useState, useCallback, useMemo } from 'react'
 import type { GestureResponderEvent } from 'react-native'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View, Alert } from 'react-native'
 import type { PinchGestureHandlerGestureEvent } from 'react-native-gesture-handler'
 import { PinchGestureHandler, TapGestureHandler } from 'react-native-gesture-handler'
 import type { CameraProps, CameraRuntimeError, PhotoFile, VideoFile } from 'react-native-vision-camera'
@@ -39,6 +39,7 @@ export default function CameraPage(): React.ReactElement {
   const router = useRouter()
   const camera = useRef<Camera>(null)
   const [isCameraInitialized, setIsCameraInitialized] = useState(false)
+  const [recordingStartTime, setRecordingStartTime] = useState<number | null>(null)
   const microphone = useMicrophonePermission()
   const location = useLocationPermission()
   const zoom = useSharedValue(1)
@@ -48,6 +49,11 @@ export default function CameraPage(): React.ReactElement {
   const isFocussed = useIsFocused()
   const isForeground = useIsForeground()
   const isActive = isFocussed && isForeground
+  
+  // Callback when recording starts
+  const handleRecordingStart = useCallback(() => {
+    setRecordingStartTime(Date.now())
+  }, [])
 
   // Check camera permission status
   const cameraPermissionStatus = Camera.getCameraPermissionStatus()
@@ -114,12 +120,37 @@ export default function CameraPage(): React.ReactElement {
   const onMediaCaptured = useCallback(
     (media: PhotoFile | VideoFile, type: 'photo' | 'video') => {
       console.log(`Media captured! ${JSON.stringify(media)}`)
-      router.push({
-        pathname: '/MediaViewer',
-        params: { path: media.path, type },
-      })
+      
+      // Check if this is a video for analysis (recorded from analysis flow)
+      if (type === 'video' && recordingStartTime) {
+        const duration = (Date.now() - recordingStartTime) / 1000; // duration in seconds
+        
+        // Validate video duration (max 60 seconds)
+        if (duration > 60) {
+          Alert.alert(
+            'Video Too Long',
+            'Videos for analysis must be 60 seconds or shorter. Please record a shorter video.',
+            [{ text: 'OK' }]
+          );
+          setRecordingStartTime(null);
+          return;
+        }
+        
+        // Navigate to processing screen for analysis
+        router.push({
+          pathname: '/analysis/processing',
+          params: { videoUri: `file://${media.path}` }
+        });
+        setRecordingStartTime(null);
+      } else {
+        // Normal flow - go to media viewer
+        router.push({
+          pathname: '/MediaViewer',
+          params: { path: media.path, type },
+        })
+      }
     },
-    [router],
+    [router, recordingStartTime],
   )
   const onFlipCameraPressed = useCallback(() => {
     setCameraPosition((p) => (p === 'back' ? 'front' : 'back'))
@@ -262,6 +293,7 @@ export default function CameraPage(): React.ReactElement {
         flash={supportsFlash ? flash : 'off'}
         enabled={isCameraInitialized && isActive}
         setIsPressingButton={setIsPressingButton}
+        onRecordingStart={handleRecordingStart}
       />
 
       <StatusBarBlurBackground />

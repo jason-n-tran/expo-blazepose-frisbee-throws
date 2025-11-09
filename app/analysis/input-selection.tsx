@@ -1,48 +1,86 @@
-import { View, Text } from 'react-native';
+import React, { useState } from 'react';
+import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Button, ButtonText } from '@/components/ui/button';
+import { VideoInputSelector } from '@/components/VideoInputSelector';
+import * as ImagePicker from 'expo-image-picker';
 
 export default function InputSelectionScreen() {
   const router = useRouter();
-
-  const handleRecordVideo = () => {
-    // Navigate to camera screen for recording
-    router.push('/');
-  };
+  const [isSelecting, setIsSelecting] = useState(false);
 
   const handleSelectVideo = async () => {
-    // Will implement video picker in next task
-    console.log('Select video from library');
+    if (isSelecting) return;
+    
+    setIsSelecting(true);
+    try {
+      // Request media library permissions
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Please grant media library access to select videos.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      // Launch image picker with video filter
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['videos'],
+        allowsEditing: false,
+        quality: 1,
+        videoMaxDuration: 60, // 60 seconds max
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const video = result.assets[0];
+        
+        // Validate video format
+        const uri = video.uri;
+        const isValidFormat = uri.toLowerCase().endsWith('.mp4') || 
+                             uri.toLowerCase().endsWith('.mov') ||
+                             uri.toLowerCase().includes('mp4') ||
+                             uri.toLowerCase().includes('mov');
+        
+        if (!isValidFormat) {
+          Alert.alert(
+            'Invalid Format',
+            'Please select a video in MP4 or MOV format.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+
+        // Check video duration if available
+        if (video.duration && video.duration > 60000) { // duration in ms
+          Alert.alert(
+            'Video Too Long',
+            'Please select a video that is 60 seconds or shorter.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+
+        // Navigate to processing screen with video URI
+        router.push({
+          pathname: '/analysis/processing',
+          params: { videoUri: uri }
+        });
+      }
+    } catch (error) {
+      console.error('Error selecting video:', error);
+      Alert.alert(
+        'Error',
+        'Failed to select video. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsSelecting(false);
+    }
   };
 
   return (
-    <View className="flex-1 bg-black justify-center items-center px-6">
-      <Text className="text-white text-2xl font-bold mb-8 text-center">
-        Choose Video Input
-      </Text>
-      
-      <View className="w-full max-w-md gap-4">
-        <Button
-          size="xl"
-          onPress={handleRecordVideo}
-          className="w-full"
-        >
-          <ButtonText>Record New Video</ButtonText>
-        </Button>
-
-        <Button
-          size="xl"
-          variant="outline"
-          onPress={handleSelectVideo}
-          className="w-full"
-        >
-          <ButtonText>Select Existing Video</ButtonText>
-        </Button>
-      </View>
-
-      <Text className="text-gray-400 text-sm mt-8 text-center">
-        Record or select a video of your throw for analysis
-      </Text>
-    </View>
+    <VideoInputSelector onSelectPressed={handleSelectVideo} />
   );
 }

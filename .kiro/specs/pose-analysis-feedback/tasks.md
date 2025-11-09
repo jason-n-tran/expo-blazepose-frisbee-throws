@@ -35,21 +35,31 @@
     - Create `types/pose.ts` file with all type definitions
     - _Requirements: 2.4, 3.2, 3.3, 4.1_
 
-- [ ] 2. Implement video input selection module
-  - [ ] 2.1 Create VideoInputSelector component with record and select options
+- [x] 2. Implement video input selection module
+
+
+
+
+
+  - [x] 2.1 Create VideoInputSelector component with record and select options
+
+
     - Build UI with two prominent buttons using Gluestack UI Button components
     - Style with NativeWind classes for consistent design
     - Add "Record New Video" button that navigates to camera screen
     - Add "Select Existing Video" button that opens media library picker
     - Implement navigation handlers using Expo Router's useRouter hook
     - _Requirements: 1.1, 1.2, 7.2, 7.3_
-  - [ ] 2.2 Integrate expo-image-picker for media library access
+  - [x] 2.2 Integrate expo-image-picker for media library access
+
     - Implement launchImageLibraryAsync with video mediaTypes
     - Add video format validation (mp4, mov support)
     - Handle user cancellation gracefully
     - Pass selected video URI to processing screen
     - _Requirements: 1.3, 1.5, 8.4_
-  - [ ] 2.3 Implement video recording flow using existing camera functionality
+  - [x] 2.3 Implement video recording flow using existing camera functionality
+
+
     - Navigate to existing camera screen from input selection
     - Ensure recorded video is saved to media library (already implemented)
     - Pass recorded video URI back to analysis flow

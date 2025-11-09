@@ -36,7 +36,8 @@
     },
     "plugins": [
       "expo-router",
-      "react-native-vision-camera"
+      "react-native-vision-camera",
+      "expo-video"
     ],
     "scheme": "your-app-scheme"
   }

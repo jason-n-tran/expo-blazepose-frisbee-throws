@@ -25,8 +25,6 @@ import MaterialIcon from '@expo/vector-icons/MaterialIcons'
 import IonIcon from '@expo/vector-icons/Ionicons'
 import { useIsFocused } from '@react-navigation/core'
 import { usePreferredCameraDevice } from '@/hooks/usePreferredCameraDevice'
-import { examplePlugin } from '@/frame-processors/ExamplePlugin'
-import { exampleKotlinSwiftPlugin } from '@/frame-processors/ExampleKotlinSwiftPlugin'
 import { useRouter } from 'expo-router'
 
 
@@ -116,7 +114,10 @@ export default function CameraPage(): React.ReactElement {
   const onMediaCaptured = useCallback(
     (media: PhotoFile | VideoFile, type: 'photo' | 'video') => {
       console.log(`Media captured! ${JSON.stringify(media)}`)
-      router.navigate('/(tabs)/media')
+      router.push({
+        pathname: '/MediaViewer',
+        params: { path: media.path, type },
+      })
     },
     [router],
   )
@@ -289,12 +290,12 @@ export default function CameraPage(): React.ReactElement {
             <IonIcon name={enableNightMode ? 'moon' : 'moon-outline'} color="white" size={24} />
           </PressableOpacity>
         )}
-        <PressableOpacity style={styles.button} onPress={() => router.navigate('Devices')}>
+        {/* <PressableOpacity style={styles.button} onPress={() => router.navigate('Devices')}>
           <IonIcon name="settings-outline" color="white" size={24} />
         </PressableOpacity>
         <PressableOpacity style={styles.button} onPress={() => router.navigate('CodeScannerPage')}>
           <IonIcon name="qr-code-outline" color="white" size={24} />
-        </PressableOpacity>
+        </PressableOpacity> */}
       </View>
     </View>
   )

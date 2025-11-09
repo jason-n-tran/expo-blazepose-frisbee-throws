@@ -1,8 +1,6 @@
 import { NativeTabs, Label, Icon, VectorIcon } from 'expo-router/unstable-native-tabs';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Camera } from 'react-native-vision-camera'
-import { useRouter, useSegments } from 'expo-router';
-import { useEffect } from 'react';
 import { Platform } from 'react-native';
 
 export default function TabsHost() {
@@ -26,7 +24,7 @@ export default function TabsHost() {
                 <Label>Home</Label>
                 {Platform.select({
                     ios: <Icon sf="house.fill" />,
-                    android: <Icon src={<VectorIcon family={Ionicons} name="home" />} />,
+                    android: <Icon src={<VectorIcon family={Ionicons} name="camera-outline" />} />,
                 })}
             </NativeTabs.Trigger>
             <NativeTabs.Trigger name="settings">

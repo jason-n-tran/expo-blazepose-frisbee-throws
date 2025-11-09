@@ -15,7 +15,7 @@ import {
 } from 'react-native-vision-camera'
 import { Camera } from 'react-native-vision-camera'
 import { CONTENT_SPACING, CONTROL_BUTTON_SIZE, MAX_ZOOM_FACTOR, SAFE_AREA_PADDING, SCREEN_HEIGHT, SCREEN_WIDTH } from '../../Constants'
-import Reanimated, { Extrapolate, interpolate, useAnimatedGestureHandler, useAnimatedProps, useSharedValue } from 'react-native-reanimated'
+import Reanimated, { Extrapolate, interpolate, useAnimatedProps, useSharedValue } from 'react-native-reanimated'
 import { useEffect } from 'react'
 import { useIsForeground } from '@/hooks/useIsForeground'
 import { StatusBarBlurBackground } from '@/components/StatusBarBlurBackground'
@@ -37,7 +37,7 @@ Reanimated.addWhitelistedNativeProps({
 
 const SCALE_FULL_ZOOM = 3
 
-export function CameraPage(): React.ReactElement {
+export default function CameraPage(): React.ReactElement {
   const router = useRouter()
   const camera = useRef<Camera>(null)
   const [isCameraInitialized, setIsCameraInitialized] = useState(false)
@@ -50,6 +50,10 @@ export function CameraPage(): React.ReactElement {
   const isFocussed = useIsFocused()
   const isForeground = useIsForeground()
   const isActive = isFocussed && isForeground
+
+  // Check camera permission status
+  const cameraPermissionStatus = Camera.getCameraPermissionStatus()
+  const hasCameraPermission = cameraPermissionStatus === 'granted'
 
   const [cameraPosition, setCameraPosition] = useState<'front' | 'back'>('back')
   const [enableHdr, setEnableHdr] = useState(false)
@@ -112,10 +116,7 @@ export function CameraPage(): React.ReactElement {
   const onMediaCaptured = useCallback(
     (media: PhotoFile | VideoFile, type: 'photo' | 'video') => {
       console.log(`Media captured! ${JSON.stringify(media)}`)
-      router.navigate('MediaPage', {
-        path: media.path,
-        type: type,
-      })
+      router.navigate('/(tabs)/media')
     },
     [router],
   )
@@ -153,17 +154,19 @@ export function CameraPage(): React.ReactElement {
   //#region Pinch to Zoom Gesture
   // The gesture handler maps the linear pinch gesture (0 - 1) to an exponential curve since a camera's zoom
   // function does not appear linear to the user. (aka zoom 0.1 -> 0.2 does not look equal in difference as 0.8 -> 0.9)
-  const onPinchGesture = useAnimatedGestureHandler<PinchGestureHandlerGestureEvent, { startZoom?: number }>({
-    onStart: (_, context) => {
-      context.startZoom = zoom.value
-    },
-    onActive: (event, context) => {
+  const startZoom = useSharedValue(0)
+  const onPinchGesture = useCallback((event: PinchGestureHandlerGestureEvent) => {
+    'worklet'
+    const { state, scale } = event.nativeEvent
+    
+    if (state === 2) { // BEGAN
+      startZoom.value = zoom.value
+    } else if (state === 4) { // ACTIVE
       // we're trying to map the scale gesture to a linear zoom here
-      const startZoom = context.startZoom ?? 0
-      const scale = interpolate(event.scale, [1 - 1 / SCALE_FULL_ZOOM, 1, SCALE_FULL_ZOOM], [-1, 0, 1], Extrapolate.CLAMP)
-      zoom.value = interpolate(scale, [-1, 0, 1], [minZoom, startZoom, maxZoom], Extrapolate.CLAMP)
-    },
-  })
+      const scaleValue = interpolate(scale, [1 - 1 / SCALE_FULL_ZOOM, 1, SCALE_FULL_ZOOM], [-1, 0, 1], Extrapolate.CLAMP)
+      zoom.value = interpolate(scaleValue, [-1, 0, 1], [minZoom, startZoom.value, maxZoom], Extrapolate.CLAMP)
+    }
+  }, [minZoom, maxZoom, zoom, startZoom])
   //#endregion
 
   useEffect(() => {
@@ -184,18 +187,28 @@ export function CameraPage(): React.ReactElement {
     runAtTargetFps(10, () => {
       'worklet'
       console.log(`${frame.timestamp}: ${frame.width}x${frame.height} ${frame.pixelFormat} Frame (${frame.orientation})`)
-      examplePlugin(frame)
-      exampleKotlinSwiftPlugin(frame)
+      // Example plugins commented out - uncomment if you build the native modules
+      // examplePlugin(frame)
+      // exampleKotlinSwiftPlugin(frame)
     })
   }, [])
 
   const videoHdr = format?.supportsVideoHdr && enableHdr
   const photoHdr = format?.supportsPhotoHdr && enableHdr && !videoHdr
 
+  // Don't render camera if permissions aren't granted
+  if (!hasCameraPermission) {
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.text}>Camera permission required</Text>
+      </View>
+    )
+  }
+
   return (
     <View style={styles.container}>
       {device != null ? (
-        <PinchGestureHandler onGestureEvent={onPinchGesture} enabled={isActive}>
+        <PinchGestureHandler onGestureEvent={onPinchGesture as any} enabled={isActive}>
           <Reanimated.View onTouchEnd={onFocusTap} style={StyleSheet.absoluteFill}>
             <TapGestureHandler onEnded={onDoubleTap} numberOfTaps={2}>
               <ReanimatedCamera
@@ -268,7 +281,7 @@ export function CameraPage(): React.ReactElement {
         )}
         {supportsHdr && (
           <PressableOpacity style={styles.button} onPress={() => setEnableHdr((h) => !h)}>
-            <MaterialIcon name={enableHdr ? 'hdr' : 'hdr-off'} color="white" size={24} />
+            <MaterialIcon name={enableHdr ? 'hdr' : ('hdr-off' as any)} color="white" size={24} />
           </PressableOpacity>
         )}
         {canToggleNightMode && (
@@ -295,7 +308,7 @@ const styles = StyleSheet.create({
   captureButton: {
     position: 'absolute',
     alignSelf: 'center',
-    bottom: SAFE_AREA_PADDING.paddingBottom,
+    bottom: SAFE_AREA_PADDING.paddingBottom + 80, // Add extra space for tab bar
   },
   button: {
     marginBottom: CONTENT_SPACING,

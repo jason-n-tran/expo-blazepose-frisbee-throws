@@ -11,9 +11,9 @@ import Reanimated, {
   useAnimatedStyle,
   withSpring,
   withTiming,
-  useAnimatedGestureHandler,
   useSharedValue,
   withRepeat,
+  SharedValue,
 } from 'react-native-reanimated'
 import type { Camera, PhotoFile, VideoFile } from 'react-native-vision-camera'
 import { CAPTURE_BUTTON_SIZE, SCREEN_HEIGHT, SCREEN_WIDTH } from './../Constants'
@@ -22,12 +22,12 @@ const START_RECORDING_DELAY = 200
 const BORDER_WIDTH = CAPTURE_BUTTON_SIZE * 0.1
 
 interface Props extends ViewProps {
-  camera: React.RefObject<Camera>
+  camera: React.RefObject<Camera | null>
   onMediaCaptured: (media: PhotoFile | VideoFile, type: 'photo' | 'video') => void
 
   minZoom: number
   maxZoom: number
-  cameraZoom: Reanimated.SharedValue<number>
+  cameraZoom: SharedValue<number>
 
   flash: 'off' | 'on'
 
@@ -112,7 +112,7 @@ const _CaptureButton: React.FC<Props> = ({
   //#endregion
 
   //#region Tap handler
-  const tapHandler = useRef<TapGestureHandler>()
+  const tapHandler = useRef<TapGestureHandler>(null)
   const onHandlerStateChanged = useCallback(
     async ({ nativeEvent: event }: TapGestureHandlerStateChangeEvent) => {
       // This is the gesture handler for the circular "shutter" button.
@@ -173,24 +173,26 @@ const _CaptureButton: React.FC<Props> = ({
   )
   //#endregion
   //#region Pan handler
-  const panHandler = useRef<PanGestureHandler>()
-  const onPanGestureEvent = useAnimatedGestureHandler<PanGestureHandlerGestureEvent, { offsetY?: number; startY?: number }>({
-    onStart: (event, context) => {
-      context.startY = event.absoluteY
-      const yForFullZoom = context.startY * 0.7
-      const offsetYForFullZoom = context.startY - yForFullZoom
+  const panHandler = useRef<PanGestureHandler>(null)
+  const offsetY = useSharedValue(0)
+  const startY = useSharedValue(0)
+  
+  const onPanGestureEvent = useCallback((event: PanGestureHandlerGestureEvent) => {
+    'worklet'
+    const { state, absoluteY } = event.nativeEvent
+    
+    if (state === 2) { // BEGAN
+      startY.value = absoluteY
+      const yForFullZoom = startY.value * 0.7
+      const offsetYForFullZoom = startY.value - yForFullZoom
 
       // extrapolate [0 ... 1] zoom -> [0 ... Y_FOR_FULL_ZOOM] finger position
-      context.offsetY = interpolate(cameraZoom.value, [minZoom, maxZoom], [0, offsetYForFullZoom], Extrapolate.CLAMP)
-    },
-    onActive: (event, context) => {
-      const offset = context.offsetY ?? 0
-      const startY = context.startY ?? SCREEN_HEIGHT
-      const yForFullZoom = startY * 0.7
-
-      cameraZoom.value = interpolate(event.absoluteY - offset, [yForFullZoom, startY], [maxZoom, minZoom], Extrapolate.CLAMP)
-    },
-  })
+      offsetY.value = interpolate(cameraZoom.value, [minZoom, maxZoom], [0, offsetYForFullZoom], Extrapolate.CLAMP)
+    } else if (state === 4) { // ACTIVE
+      const yForFullZoom = startY.value * 0.7
+      cameraZoom.value = interpolate(absoluteY - offsetY.value, [yForFullZoom, startY.value], [maxZoom, minZoom], Extrapolate.CLAMP)
+    }
+  }, [cameraZoom, minZoom, maxZoom, offsetY, startY])
   //#endregion
 
   const shadowStyle = useAnimatedStyle(
@@ -259,7 +261,7 @@ const _CaptureButton: React.FC<Props> = ({
           ref={panHandler}
           failOffsetX={[-SCREEN_WIDTH, SCREEN_WIDTH]}
           activeOffsetY={[-2, 2]}
-          onGestureEvent={onPanGestureEvent}
+          onGestureEvent={onPanGestureEvent as any}
           simultaneousHandlers={tapHandler}>
           <Reanimated.View style={styles.flex}>
             <Reanimated.View style={[styles.shadow, shadowStyle]} />

@@ -8,34 +8,55 @@ import { CONTENT_SPACING, SAFE_AREA_PADDING } from '../../Constants'
 import { useRouter } from 'expo-router'
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const BANNER_IMAGE = require('./img/11.png') as ImageRequireSource
+const BANNER_IMAGE = require('@/assets/11.png') as ImageRequireSource
 
-export function PermissionsPage(): React.ReactElement {
+export default function PermissionsPage(): React.ReactElement {
   const router = useRouter()
-  const [cameraPermissionStatus, setCameraPermissionStatus] = useState<CameraPermissionStatus>('not-determined')
-  const [microphonePermissionStatus, setMicrophonePermissionStatus] = useState<CameraPermissionStatus>('not-determined')
+  const [cameraPermissionStatus, setCameraPermissionStatus] = useState<CameraPermissionStatus>(() => Camera.getCameraPermissionStatus())
+  const [microphonePermissionStatus, setMicrophonePermissionStatus] = useState<CameraPermissionStatus>(() => Camera.getMicrophonePermissionStatus())
 
   const requestMicrophonePermission = useCallback(async () => {
-    console.log('Requesting microphone permission...')
+    const currentStatus = Camera.getMicrophonePermissionStatus()
+    
+    // If already denied, go straight to settings
+    if (currentStatus === 'denied') {
+      await Linking.openSettings()
+      return
+    }
+    
     const permission = await Camera.requestMicrophonePermission()
-    console.log(`Microphone permission status: ${permission}`)
-
-    if (permission === 'denied') await Linking.openSettings()
     setMicrophonePermissionStatus(permission)
+    
+    // Only open settings if user explicitly denied (not on first request)
+    if (permission === 'denied' && currentStatus === 'not-determined') {
+      await Linking.openSettings()
+    }
   }, [])
 
   const requestCameraPermission = useCallback(async () => {
-    console.log('Requesting camera permission...')
+    const currentStatus = Camera.getCameraPermissionStatus()
+    
+    // If already denied, go straight to settings
+    if (currentStatus === 'denied') {
+      await Linking.openSettings()
+      return
+    }
+    
     const permission = await Camera.requestCameraPermission()
-    console.log(`Camera permission status: ${permission}`)
-
-    if (permission === 'denied') await Linking.openSettings()
     setCameraPermissionStatus(permission)
+    
+    // Only open settings if user explicitly denied (not on first request)
+    if (permission === 'denied' && currentStatus === 'not-determined') {
+      await Linking.openSettings()
+    }
   }, [])
 
   useEffect(() => {
-    if (cameraPermissionStatus === 'granted' && microphonePermissionStatus === 'granted') router.replace('CameraPage')
-  }, [cameraPermissionStatus, microphonePermissionStatus, router])
+    // Only camera permission is required, microphone is optional
+    if (cameraPermissionStatus === 'granted') {
+      router.replace('/(tabs)')
+    }
+  }, [cameraPermissionStatus, router])
 
   return (
     <View style={styles.container}>
@@ -50,11 +71,15 @@ export function PermissionsPage(): React.ReactElement {
             </Text>
           </Text>
         )}
-        {microphonePermissionStatus !== 'granted' && (
+        {microphonePermissionStatus !== 'granted' && cameraPermissionStatus === 'granted' && (
           <Text style={styles.permissionText}>
-            Vision Camera needs <Text style={styles.bold}>Microphone permission</Text>.{' '}
+            Vision Camera can use <Text style={styles.bold}>Microphone permission</Text> for video recording.{' '}
             <Text style={styles.hyperlink} onPress={requestMicrophonePermission}>
               Grant
+            </Text>
+            {' or '}
+            <Text style={styles.hyperlink} onPress={() => router.replace('/(tabs)')}>
+              Skip
             </Text>
           </Text>
         )}

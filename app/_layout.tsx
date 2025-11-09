@@ -13,7 +13,7 @@ export default function App() {
           }}
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }}/>
-          <Stack.Screen name="outside" options={{ title: 'Outside Page' }}/>
+          <Stack.Screen name="permissions" options={{ title: 'Permissions Page' }}/>
         </Stack>
       </GluestackUIProvider>
   );

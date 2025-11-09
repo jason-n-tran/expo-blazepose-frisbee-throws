@@ -11,6 +11,9 @@ export default function Page() {
                     <Text>Item {number}</Text>
                 </Link>
             ))}
+            <Link href="/outside">
+                <Text>Outside</Text>
+            </Link>
         </View>
     );
 }

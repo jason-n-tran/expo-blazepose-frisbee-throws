@@ -2,13 +2,18 @@ import React, { useState } from 'react';
 import { View, Text, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { FeedbackDisplay } from '@/components/FeedbackDisplay';
+import { ErrorDialog } from '@/components/ErrorDialog';
 import { Button, ButtonText } from '@/components/ui/button';
+import { AnalysisError, AnalysisErrorType } from '@/types/errors';
 import type { AnalysisReport, BodySegment } from '@/types/pose';
 
 export default function ResultsScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
   const [selectedSegment, setSelectedSegment] = useState<BodySegment | null>(null);
+  const [error, setError] = useState<AnalysisError | Error | null>(null);
+  const [showErrorDialog, setShowErrorDialog] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Parse analysis report from params
   // In a real implementation, this would come from navigation params or storage
@@ -42,6 +47,9 @@ export default function ResultsScreen() {
       return;
     }
 
+    if (isSaving) return;
+
+    setIsSaving(true);
     try {
       // Import StorageService dynamically to avoid circular dependencies
       const { StorageService } = await import('@/services/StorageService');
@@ -49,10 +57,31 @@ export default function ResultsScreen() {
       await storageService.saveAnalysis(analysisReport);
       
       Alert.alert('Success', 'Analysis saved successfully');
-    } catch (error) {
-      console.error('Failed to save analysis:', error);
-      Alert.alert('Error', 'Failed to save analysis. Please try again.');
+    } catch (err) {
+      console.error('Failed to save analysis:', err);
+      
+      if (err instanceof AnalysisError) {
+        setError(err);
+      } else {
+        setError(new AnalysisError(
+          AnalysisErrorType.INSUFFICIENT_STORAGE,
+          'Failed to save analysis. Please try again.',
+          true
+        ));
+      }
+      setShowErrorDialog(true);
+    } finally {
+      setIsSaving(false);
     }
+  };
+
+  const handleCloseError = () => {
+    setShowErrorDialog(false);
+    setError(null);
+  };
+
+  const handleRetry = () => {
+    handleSaveAnalysis();
   };
 
   const handleNewAnalysis = () => {
@@ -77,42 +106,55 @@ export default function ResultsScreen() {
   }
 
   return (
-    <View className="flex-1 bg-gray-50">
-      {/* Feedback Display */}
-      <View className="flex-1">
-        <FeedbackDisplay
-          analysisReport={analysisReport}
-          onSegmentPress={handleSegmentPress}
-        />
-      </View>
+    <>
+      <View className="flex-1 bg-gray-50">
+        {/* Feedback Display */}
+        <View className="flex-1">
+          <FeedbackDisplay
+            analysisReport={analysisReport}
+            onSegmentPress={handleSegmentPress}
+          />
+        </View>
 
-      {/* Action Buttons */}
-      <View className="bg-white p-4 border-t border-gray-200">
-        <Button
-          onPress={handleViewComparison}
-          className="mb-3"
-        >
-          <ButtonText>View Comparison</ButtonText>
-        </Button>
-
-        <View className="flex-row gap-3">
+        {/* Action Buttons */}
+        <View className="bg-white p-4 border-t border-gray-200">
           <Button
-            onPress={handleSaveAnalysis}
-            variant="outline"
-            className="flex-1"
+            onPress={handleViewComparison}
+            className="mb-3"
           >
-            <ButtonText className="text-primary-500">Save Analysis</ButtonText>
+            <ButtonText>View Comparison</ButtonText>
           </Button>
 
-          <Button
-            onPress={handleNewAnalysis}
-            variant="outline"
-            className="flex-1"
-          >
-            <ButtonText className="text-primary-500">New Analysis</ButtonText>
-          </Button>
+          <View className="flex-row gap-3">
+            <Button
+              onPress={handleSaveAnalysis}
+              variant="outline"
+              className="flex-1"
+              disabled={isSaving}
+            >
+              <ButtonText className="text-primary-500">
+                {isSaving ? 'Saving...' : 'Save Analysis'}
+              </ButtonText>
+            </Button>
+
+            <Button
+              onPress={handleNewAnalysis}
+              variant="outline"
+              className="flex-1"
+            >
+              <ButtonText className="text-primary-500">New Analysis</ButtonText>
+            </Button>
+          </View>
         </View>
       </View>
-    </View>
+
+      <ErrorDialog
+        isOpen={showErrorDialog}
+        error={error}
+        onClose={handleCloseError}
+        onRetry={handleRetry}
+        showRetry={true}
+      />
+    </>
   );
 }

@@ -6,12 +6,14 @@
  */
 
 import { MMKV } from 'react-native-mmkv';
+import * as FileSystem from 'expo-file-system';
 import {
   AnalysisReport,
   StoredAnalysis,
   GoldStandardData,
   PoseLandmarkData,
 } from '@/types/pose';
+import { AnalysisError, AnalysisErrorType } from '@/types/errors';
 
 /**
  * Storage keys for MMKV
@@ -32,28 +34,81 @@ const storage = new MMKV();
  */
 export class StorageService {
   /**
+   * Minimum free storage space required (in bytes) - 100MB
+   */
+  private static readonly MIN_FREE_STORAGE = 100 * 1024 * 1024;
+
+  /**
+   * Check available storage space
+   * @returns Available storage in bytes
+   */
+  async checkAvailableStorage(): Promise<number> {
+    try {
+      const freeDiskStorage = await FileSystem.getFreeDiskStorageAsync();
+      return freeDiskStorage;
+    } catch (error) {
+      console.error('Failed to check storage:', error);
+      // Return a default value if check fails
+      return StorageService.MIN_FREE_STORAGE;
+    }
+  }
+
+  /**
+   * Verify sufficient storage is available
+   * @throws AnalysisError if insufficient storage
+   */
+  async verifyStorageAvailable(): Promise<void> {
+    const available = await this.checkAvailableStorage();
+    
+    if (available < StorageService.MIN_FREE_STORAGE) {
+      const availableMB = Math.round(available / (1024 * 1024));
+      const requiredMB = Math.round(StorageService.MIN_FREE_STORAGE / (1024 * 1024));
+      
+      throw new AnalysisError(
+        AnalysisErrorType.INSUFFICIENT_STORAGE,
+        `Insufficient storage space. Available: ${availableMB}MB, Required: ${requiredMB}MB`,
+        true
+      );
+    }
+  }
+
+  /**
    * Save an analysis report to storage
    * @param report Analysis report to save
    * @returns Unique ID of saved analysis
    */
   async saveAnalysis(report: AnalysisReport): Promise<string> {
-    const storedAnalysis: StoredAnalysis = {
-      id: report.id,
-      timestamp: report.timestamp.getTime(),
-      videoUri: report.videoUri,
-      report,
-    };
+    try {
+      // Check storage before saving
+      await this.verifyStorageAvailable();
 
-    // Get existing history
-    const history = await this.getAnalysisHistory();
-    
-    // Add new analysis
-    history.push(storedAnalysis);
-    
-    // Save updated history
-    storage.set(STORAGE_KEYS.ANALYSIS_HISTORY, JSON.stringify(history));
-    
-    return report.id;
+      const storedAnalysis: StoredAnalysis = {
+        id: report.id,
+        timestamp: report.timestamp.getTime(),
+        videoUri: report.videoUri,
+        report,
+      };
+
+      // Get existing history
+      const history = await this.getAnalysisHistory();
+      
+      // Add new analysis
+      history.push(storedAnalysis);
+      
+      // Save updated history
+      storage.set(STORAGE_KEYS.ANALYSIS_HISTORY, JSON.stringify(history));
+      
+      return report.id;
+    } catch (error) {
+      if (error instanceof AnalysisError) {
+        throw error;
+      }
+      throw new AnalysisError(
+        AnalysisErrorType.INSUFFICIENT_STORAGE,
+        `Failed to save analysis: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        true
+      );
+    }
   }
 
   /**

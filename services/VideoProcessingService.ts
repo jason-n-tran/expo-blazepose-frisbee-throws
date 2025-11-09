@@ -121,31 +121,60 @@ export class VideoProcessingService {
       // Check if file exists
       const fileInfo = await FileSystem.getInfoAsync(videoUri);
       if (!fileInfo.exists) {
-        return {
-          isValid: false,
-          error: 'Video file not found',
-        };
+        throw new AnalysisError(
+          AnalysisErrorType.VIDEO_LOAD_FAILED,
+          'Video file not found',
+          true
+        );
+      }
+
+      // Check if file is readable
+      if (!fileInfo.isDirectory && fileInfo.size === 0) {
+        throw new AnalysisError(
+          AnalysisErrorType.VIDEO_CORRUPTED,
+          'Video file is empty or corrupted',
+          true
+        );
       }
 
       // Check file format
       const extension = videoUri.split('.').pop()?.toLowerCase();
       if (!extension || !VideoProcessingService.SUPPORTED_FORMATS.includes(extension)) {
-        return {
-          isValid: false,
-          error: `Unsupported video format. Supported formats: ${VideoProcessingService.SUPPORTED_FORMATS.join(', ')}`,
-        };
+        throw new AnalysisError(
+          AnalysisErrorType.VIDEO_INVALID_FORMAT,
+          `Unsupported video format. Supported formats: ${VideoProcessingService.SUPPORTED_FORMATS.join(', ')}`,
+          true
+        );
       }
 
       // Get video duration
-      const duration = await this.getVideoDuration(videoUri);
+      let duration: number;
+      try {
+        duration = await this.getVideoDuration(videoUri);
+      } catch (error) {
+        throw new AnalysisError(
+          AnalysisErrorType.VIDEO_CORRUPTED,
+          'Unable to read video file. The file may be corrupted.',
+          true
+        );
+      }
 
       // Check duration
       if (duration > VideoProcessingService.MAX_VIDEO_DURATION) {
-        return {
-          isValid: false,
-          duration,
-          error: `Video is too long (${duration}s). Maximum duration is ${VideoProcessingService.MAX_VIDEO_DURATION}s`,
-        };
+        throw new AnalysisError(
+          AnalysisErrorType.VIDEO_TOO_LONG,
+          `Video is too long (${Math.round(duration)}s). Maximum duration is ${VideoProcessingService.MAX_VIDEO_DURATION}s`,
+          true
+        );
+      }
+
+      // Check minimum duration (at least 1 second)
+      if (duration < 1) {
+        throw new AnalysisError(
+          AnalysisErrorType.VIDEO_LOAD_FAILED,
+          'Video is too short. Please select a video at least 1 second long.',
+          true
+        );
       }
 
       return {
@@ -153,6 +182,12 @@ export class VideoProcessingService {
         duration,
       };
     } catch (error) {
+      if (error instanceof AnalysisError) {
+        return {
+          isValid: false,
+          error: error.getUserMessage(),
+        };
+      }
       return {
         isValid: false,
         error: error instanceof Error ? error.message : 'Unknown validation error',

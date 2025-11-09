@@ -15,29 +15,65 @@ export class PoseDetectionService {
   /**
    * Initialize the PoseLandmarker with BlazePose model
    * Loads WASM files and model from CDN
+   * @param useOfflineModel - If true, attempt to use bundled model instead of CDN
    */
-  async initialize(): Promise<void> {
+  async initialize(useOfflineModel: boolean = false): Promise<void> {
     try {
       // Initialize FilesetResolver for vision tasks
-      const vision = await FilesetResolver.forVisionTasks(
-        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
-      );
+      let vision;
+      try {
+        vision = await FilesetResolver.forVisionTasks(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
+        );
+      } catch (error) {
+        // Network error loading WASM files
+        throw new AnalysisError(
+          AnalysisErrorType.NETWORK_ERROR,
+          'Failed to load pose detection resources. Please check your internet connection.',
+          true
+        );
+      }
 
       // Create PoseLandmarker with BlazePose Lite model
-      this.poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task',
-          delegate: 'GPU', // Use GPU acceleration if available
-        },
-        runningMode: 'VIDEO',
-        numPoses: 1, // Detect single person
-        minPoseDetectionConfidence: 0.5,
-        minPosePresenceConfidence: 0.5,
-        minTrackingConfidence: 0.5,
-      });
+      try {
+        this.poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: useOfflineModel
+              ? '/assets/pose_landmarker_lite.task' // Bundled model path
+              : 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task',
+            delegate: 'GPU', // Use GPU acceleration if available
+          },
+          runningMode: 'VIDEO',
+          numPoses: 1, // Detect single person
+          minPoseDetectionConfidence: 0.5,
+          minPosePresenceConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+        });
+      } catch (error) {
+        // Model loading error
+        if (!useOfflineModel) {
+          // Try offline model as fallback
+          console.warn('Failed to load model from CDN, attempting offline model...');
+          throw new AnalysisError(
+            AnalysisErrorType.NETWORK_ERROR,
+            'Failed to download pose detection model. Please check your internet connection.',
+            true
+          );
+        } else {
+          throw new AnalysisError(
+            AnalysisErrorType.MODEL_LOAD_FAILED,
+            'Failed to load pose detection model. Please restart the app.',
+            false
+          );
+        }
+      }
 
       this.isInitialized = true;
+      console.log('PoseDetectionService initialized successfully');
     } catch (error) {
+      if (error instanceof AnalysisError) {
+        throw error;
+      }
       throw new AnalysisError(
         AnalysisErrorType.MODEL_LOAD_FAILED,
         `Failed to initialize BlazePose model: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -157,14 +193,28 @@ export class PoseDetectionService {
       }
     }
 
+    // Check if no poses were detected at all
+    if (results.length === 0) {
+      throw new AnalysisError(
+        AnalysisErrorType.NO_PERSON_DETECTED,
+        'No person detected in the video. Please ensure you are clearly visible in the frame.',
+        true
+      );
+    }
+
     // Check if too many frames failed
     const successRate = (results.length / totalFrames) * 100;
     if (successRate < 50) {
       throw new AnalysisError(
-        AnalysisErrorType.NO_PERSON_DETECTED,
-        `Only ${successRate.toFixed(0)}% of frames processed successfully. Ensure the person is clearly visible in the video.`,
+        AnalysisErrorType.INSUFFICIENT_FRAMES,
+        `Only ${successRate.toFixed(0)}% of frames processed successfully. Please record in better lighting with your full body visible.`,
         true
       );
+    }
+
+    // Log warning if some frames failed but still above threshold
+    if (failedFrames > 0) {
+      console.warn(`${failedFrames} out of ${totalFrames} frames failed to process (${successRate.toFixed(0)}% success rate)`);
     }
 
     return results;
@@ -222,14 +272,28 @@ export class PoseDetectionService {
       }
     }
 
+    // Check if no poses were detected at all
+    if (results.length === 0) {
+      throw new AnalysisError(
+        AnalysisErrorType.NO_PERSON_DETECTED,
+        'No person detected in the video. Please ensure you are clearly visible in the frame.',
+        true
+      );
+    }
+
     // Check if too many frames failed
     const successRate = (results.length / totalFrames) * 100;
     if (successRate < 50) {
       throw new AnalysisError(
-        AnalysisErrorType.NO_PERSON_DETECTED,
-        `Only ${successRate.toFixed(0)}% of frames processed successfully. Ensure the person is clearly visible in the video.`,
+        AnalysisErrorType.INSUFFICIENT_FRAMES,
+        `Only ${successRate.toFixed(0)}% of frames processed successfully. Please record in better lighting with your full body visible.`,
         true
       );
+    }
+
+    // Log warning if some frames failed but still above threshold
+    if (failedFrames > 0) {
+      console.warn(`${failedFrames} out of ${totalFrames} frames failed to process (${successRate.toFixed(0)}% success rate)`);
     }
 
     return results;

@@ -194,32 +194,8 @@ export interface StoredAnalysis {
 // Error Types
 // ============================================================================
 
-/**
- * Analysis error types
- */
-export enum AnalysisErrorType {
-  VIDEO_LOAD_FAILED = 'VIDEO_LOAD_FAILED',
-  VIDEO_TOO_LONG = 'VIDEO_TOO_LONG',
-  POSE_DETECTION_FAILED = 'POSE_DETECTION_FAILED',
-  NO_PERSON_DETECTED = 'NO_PERSON_DETECTED',
-  INSUFFICIENT_STORAGE = 'INSUFFICIENT_STORAGE',
-  NETWORK_ERROR = 'NETWORK_ERROR',
-  MODEL_LOAD_FAILED = 'MODEL_LOAD_FAILED',
-}
-
-/**
- * Custom error class for analysis errors
- */
-export class AnalysisError extends Error {
-  constructor(
-    public type: AnalysisErrorType,
-    message: string,
-    public recoverable: boolean = true
-  ) {
-    super(message);
-    this.name = 'AnalysisError';
-  }
-}
+// Re-export error types from errors.ts for convenience
+export { AnalysisError, AnalysisErrorType } from './errors';
 
 // ============================================================================
 // Video Processing Types

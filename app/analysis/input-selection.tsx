@@ -1,12 +1,18 @@
 import React, { useState } from 'react';
-import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { VideoInputSelector } from '@/components/VideoInputSelector';
+import { ErrorDialog } from '@/components/ErrorDialog';
+import { VideoProcessingService } from '@/services/VideoProcessingService';
+import { AnalysisError, AnalysisErrorType } from '@/types/errors';
 import * as ImagePicker from 'expo-image-picker';
 
 export default function InputSelectionScreen() {
   const router = useRouter();
   const [isSelecting, setIsSelecting] = useState(false);
+  const [error, setError] = useState<AnalysisError | Error | null>(null);
+  const [showErrorDialog, setShowErrorDialog] = useState(false);
+
+  const videoProcessingService = new VideoProcessingService();
 
   const handleSelectVideo = async () => {
     if (isSelecting) return;
@@ -17,11 +23,12 @@ export default function InputSelectionScreen() {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
       if (status !== 'granted') {
-        Alert.alert(
-          'Permission Required',
-          'Please grant media library access to select videos.',
-          [{ text: 'OK' }]
-        );
+        setError(new AnalysisError(
+          AnalysisErrorType.INSUFFICIENT_STORAGE,
+          'Media library permission is required to select videos.',
+          true
+        ));
+        setShowErrorDialog(true);
         return;
       }
 
@@ -35,30 +42,28 @@ export default function InputSelectionScreen() {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const video = result.assets[0];
-        
-        // Validate video format
         const uri = video.uri;
-        const isValidFormat = uri.toLowerCase().endsWith('.mp4') || 
-                             uri.toLowerCase().endsWith('.mov') ||
-                             uri.toLowerCase().includes('mp4') ||
-                             uri.toLowerCase().includes('mov');
-        
-        if (!isValidFormat) {
-          Alert.alert(
-            'Invalid Format',
-            'Please select a video in MP4 or MOV format.',
-            [{ text: 'OK' }]
-          );
-          return;
-        }
 
-        // Check video duration if available
-        if (video.duration && video.duration > 60000) { // duration in ms
-          Alert.alert(
-            'Video Too Long',
-            'Please select a video that is 60 seconds or shorter.',
-            [{ text: 'OK' }]
-          );
+        // Validate video using VideoProcessingService
+        const validation = await videoProcessingService.validateVideo(uri);
+        
+        if (!validation.isValid) {
+          // Determine error type based on validation error
+          let errorType = AnalysisErrorType.VIDEO_LOAD_FAILED;
+          if (validation.error?.includes('format')) {
+            errorType = AnalysisErrorType.VIDEO_INVALID_FORMAT;
+          } else if (validation.error?.includes('long')) {
+            errorType = AnalysisErrorType.VIDEO_TOO_LONG;
+          } else if (validation.error?.includes('corrupted')) {
+            errorType = AnalysisErrorType.VIDEO_CORRUPTED;
+          }
+          
+          setError(new AnalysisError(
+            errorType,
+            validation.error || 'Video validation failed',
+            true
+          ));
+          setShowErrorDialog(true);
           return;
         }
 
@@ -70,17 +75,42 @@ export default function InputSelectionScreen() {
       }
     } catch (error) {
       console.error('Error selecting video:', error);
-      Alert.alert(
-        'Error',
-        'Failed to select video. Please try again.',
-        [{ text: 'OK' }]
-      );
+      
+      if (error instanceof AnalysisError) {
+        setError(error);
+      } else {
+        setError(new AnalysisError(
+          AnalysisErrorType.VIDEO_LOAD_FAILED,
+          'Failed to select video. Please try again.',
+          true
+        ));
+      }
+      setShowErrorDialog(true);
     } finally {
       setIsSelecting(false);
     }
   };
 
+  const handleCloseError = () => {
+    setShowErrorDialog(false);
+    setError(null);
+  };
+
+  const handleRetry = () => {
+    handleSelectVideo();
+  };
+
   return (
-    <VideoInputSelector onSelectPressed={handleSelectVideo} />
+    <>
+      <VideoInputSelector onSelectPressed={handleSelectVideo} />
+      
+      <ErrorDialog
+        isOpen={showErrorDialog}
+        error={error}
+        onClose={handleCloseError}
+        onRetry={handleRetry}
+        showRetry={true}
+      />
+    </>
   );
 }

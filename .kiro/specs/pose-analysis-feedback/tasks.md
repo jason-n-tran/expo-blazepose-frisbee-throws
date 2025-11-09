@@ -159,6 +159,7 @@
 
 
 
+
   - [x] 5.1 Create FeedbackDisplay component with categorized issues
 
 
@@ -189,35 +190,49 @@
     - Store data as JSON strings with STORAGE_KEYS constants
     - _Requirements: 6.4_
 
-- [ ] 6. Create side-by-side comparison viewer
-  - [ ] 6.1 Build ComparisonViewer component with dual video players
+- [x] 6. Create side-by-side comparison viewer
+
+
+
+
+  - [x] 6.1 Build ComparisonViewer component with dual video players
+
+
     - Create split-screen layout with two video players side by side
     - Use expo-video for both video players
     - Position user video on left, gold standard video on right
     - Add shared playback controls (play/pause, seek bar)
     - Style with NativeWind for responsive layout
     - _Requirements: 5.1, 5.2, 7.2, 7.3, 7.5_
-  - [ ] 6.2 Implement synchronized video playback
+
+  - [x] 6.2 Implement synchronized video playback
+
     - Synchronize play/pause state across both video players
     - Implement seek synchronization when user drags scrubber
     - Handle video loading states for both players
     - Ensure both videos start from same timestamp
     - Add playback speed control (optional)
     - _Requirements: 5.3_
-  - [ ] 6.3 Implement pose landmark overlay rendering
+  - [x] 6.3 Implement pose landmark overlay rendering
+
+
     - Draw detected pose landmarks on both videos during playback
     - Use canvas or SVG overlay for landmark visualization
     - Connect landmarks with lines to show skeleton structure
     - Update landmark positions based on current video frame
     - Use different colors for user vs gold standard landmarks
     - _Requirements: 5.4_
-  - [ ] 6.4 Add segment highlighting based on feedback selection
+  - [x] 6.4 Add segment highlighting based on feedback selection
+
+
     - Accept highlightedSegments prop from results screen
     - Highlight specific body segments (shoulder, elbow, etc.) in different color
     - Update highlighting when user taps feedback issue
     - Make highlighted landmarks more prominent (larger, brighter)
     - _Requirements: 5.5_
-  - [ ] 6.5 Create comparison screen route with dynamic ID parameter
+  - [x] 6.5 Create comparison screen route with dynamic ID parameter
+
+
     - Implement `app/comparison/[id].tsx` with useLocalSearchParams
     - Load analysis data by ID from StorageService
     - Pass video URIs and landmarks to ComparisonViewer component

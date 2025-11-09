@@ -41,6 +41,13 @@ export default function TabsHost() {
                 })}
                 <Label>Feed</Label>
             </NativeTabs.Trigger>
+            <NativeTabs.Trigger name="history">
+                {Platform.select({
+                    ios: <Icon sf="clock.fill" />,
+                    android: <Icon src={<VectorIcon family={Ionicons} name="time-outline" />} />,
+                })}
+                <Label>History</Label>
+            </NativeTabs.Trigger>
         </NativeTabs>
     );
 };

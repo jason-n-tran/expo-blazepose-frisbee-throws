@@ -1,0 +1,232 @@
+# Implementation Plan
+
+- [x] 1. Set up navigation structure and core infrastructure
+
+
+
+
+
+  - [x] 1.1 Create Expo Router navigation structure with analysis and comparison routes
+
+
+    - Create `app/analysis/_layout.tsx` for analysis flow stack navigator
+    - Create `app/analysis/input-selection.tsx` for video input selection screen
+    - Create `app/analysis/processing.tsx` for pose detection progress screen
+    - Create `app/analysis/results.tsx` for analysis results and feedback screen
+    - Create `app/comparison/[id].tsx` for dynamic side-by-side comparison viewer
+    - Update `app/(tabs)/_layout.tsx` to include history tab if needed
+    - _Requirements: 1.1, 1.2, 1.3, 6.1, 6.2, 6.3_
+  - [x] 1.2 Install required dependencies for pose detection and media handling
+
+
+    - Install @mediapipe/tasks-vision for BlazePose integration
+    - Install expo-image-picker for media library access
+    - Install expo-file-system for file operations
+    - Install expo-av for video frame extraction
+    - Update package.json and run npm install
+    - _Requirements: 1.5, 2.1_
+  - [x] 1.3 Create TypeScript interfaces and types for pose data models
+
+
+    - Define PoseLandmarkData, NormalizedLandmark, Landmark interfaces
+    - Define AnalysisReport, FeedbackCategory, FeedbackIssue interfaces
+    - Define JointAngles, DeviationScores, ComparisonResult interfaces
+    - Define PoseLandmarkIndex enum with all 33 BlazePose landmarks
+    - Create `types/pose.ts` file with all type definitions
+    - _Requirements: 2.4, 3.2, 3.3, 4.1_
+
+- [ ] 2. Implement video input selection module
+  - [ ] 2.1 Create VideoInputSelector component with record and select options
+    - Build UI with two prominent buttons using Gluestack UI Button components
+    - Style with NativeWind classes for consistent design
+    - Add "Record New Video" button that navigates to camera screen
+    - Add "Select Existing Video" button that opens media library picker
+    - Implement navigation handlers using Expo Router's useRouter hook
+    - _Requirements: 1.1, 1.2, 7.2, 7.3_
+  - [ ] 2.2 Integrate expo-image-picker for media library access
+    - Implement launchImageLibraryAsync with video mediaTypes
+    - Add video format validation (mp4, mov support)
+    - Handle user cancellation gracefully
+    - Pass selected video URI to processing screen
+    - _Requirements: 1.3, 1.5, 8.4_
+  - [ ] 2.3 Implement video recording flow using existing camera functionality
+    - Navigate to existing camera screen from input selection
+    - Ensure recorded video is saved to media library (already implemented)
+    - Pass recorded video URI back to analysis flow
+    - Add video duration validation (max 60 seconds)
+    - _Requirements: 1.2, 1.4, 8.4_
+
+- [ ] 3. Build pose detection service and processing pipeline
+  - [ ] 3.1 Create PoseDetectionService class with MediaPipe BlazePose integration
+    - Initialize FilesetResolver for vision tasks with WASM files
+    - Load BlazePose Lite model from CDN or bundled asset
+    - Implement initialize() method to set up PoseLandmarker
+    - Implement detectPoseInFrame() method for single frame processing
+    - Implement dispose() method to clean up resources
+    - Add error handling for model loading failures
+    - _Requirements: 2.1, 2.2, 8.5_
+  - [ ] 3.2 Create VideoProcessingService for frame extraction
+    - Implement extractFrames() method to extract video frames at 10-15 FPS
+    - Use expo-av or expo-file-system for frame extraction
+    - Implement getVideoDuration() method
+    - Implement validateVideo() method to check format and duration
+    - Return VideoFrame objects with index, timestamp, and imageData
+    - _Requirements: 2.1, 8.1, 8.4_
+  - [ ] 3.3 Implement detectPosesInVideo() method with progress tracking
+    - Extract frames from video using VideoProcessingService
+    - Process each frame through BlazePose detectPoseInFrame()
+    - Store detected landmarks with frame index and timestamp
+    - Call onProgress callback with percentage completion
+    - Handle frame processing failures gracefully (continue with remaining frames)
+    - Return array of PoseLandmarkData for all processed frames
+    - _Requirements: 2.2, 2.3, 2.4, 2.5_
+  - [ ] 3.4 Create processing screen UI with progress indicator
+    - Display circular progress indicator using Gluestack UI Progress component
+    - Show "Processing frame X of Y" counter
+    - Display estimated time remaining
+    - Add cancel button to abort processing
+    - Style with NativeWind classes
+    - Navigate to results screen on completion
+    - _Requirements: 2.3, 7.2, 7.3_
+
+- [ ] 4. Implement pose comparison and analysis engine
+  - [ ] 4.1 Create AnalysisService class with angle calculation methods
+    - Implement calculateJointAngles() to compute angles for shoulder, elbow, wrist, hip, knee
+    - Use vector math to calculate angles between three landmark points
+    - Handle both left and right side joints
+    - Return JointAngles object with all computed angles
+    - _Requirements: 3.2, 3.3_
+  - [ ] 4.2 Implement gold standard data placeholder and loading
+    - Create placeholder GoldStandardData with mock video URI and landmarks
+    - Implement StorageService.getGoldStandardData() method
+    - Store placeholder data in MMKV or as bundled JSON asset
+    - Include metadata (description, athlete name, recorded date)
+    - _Requirements: 3.1_
+  - [ ] 4.3 Implement pose comparison logic with deviation calculation
+    - Implement calculateDeviations() to compare user angles vs gold standard angles
+    - Calculate angular differences for each joint
+    - Determine severity based on deviation thresholds (>15° = high, 10-15° = medium, <10° = low)
+    - Identify key frames with significant deviations
+    - Return ComparisonResult with deviations and overall score
+    - _Requirements: 3.2, 3.3, 3.4, 3.5_
+  - [ ] 4.4 Implement feedback generation system
+    - Implement generateFeedback() to create AnalysisReport from ComparisonResult
+    - Categorize issues into Upper Body, Lower Body, and Overall Form
+    - Prioritize recommendations by severity (high deviations first)
+    - Generate description and recommendation text for each issue
+    - Calculate overall score (0-100) based on total deviations
+    - Return complete AnalysisReport object
+    - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
+
+- [ ] 5. Build feedback display and results screen
+  - [ ] 5.1 Create FeedbackDisplay component with categorized issues
+    - Display overall score prominently at top (large number with color coding)
+    - Render feedback categories (Upper Body, Lower Body, Overall Form) using Gluestack UI Card
+    - Display each issue with severity badge, description, and recommendation
+    - Use NativeWind classes for styling and layout
+    - Implement onSegmentPress callback for issue selection
+    - _Requirements: 4.3, 4.4, 7.2, 7.3_
+  - [ ] 5.2 Implement results screen with feedback and navigation options
+    - Display FeedbackDisplay component with generated analysis report
+    - Add "View Comparison" button that navigates to comparison viewer
+    - Add "Save Analysis" button to persist report to storage
+    - Add "New Analysis" button to return to input selection
+    - Handle segment press to highlight in comparison viewer
+    - Style screen with NativeWind and Gluestack UI components
+    - _Requirements: 4.1, 4.2, 6.3, 7.2, 7.3_
+  - [ ] 5.3 Implement data persistence with StorageService
+    - Create StorageService class using MMKV for local storage
+    - Implement saveAnalysis() to store AnalysisReport with unique ID
+    - Implement getAnalysisHistory() to retrieve all saved analyses
+    - Implement getAnalysisById() for single analysis retrieval
+    - Implement deleteAnalysis() for removing saved analyses
+    - Store data as JSON strings with STORAGE_KEYS constants
+    - _Requirements: 6.4_
+
+- [ ] 6. Create side-by-side comparison viewer
+  - [ ] 6.1 Build ComparisonViewer component with dual video players
+    - Create split-screen layout with two video players side by side
+    - Use expo-video for both video players
+    - Position user video on left, gold standard video on right
+    - Add shared playback controls (play/pause, seek bar)
+    - Style with NativeWind for responsive layout
+    - _Requirements: 5.1, 5.2, 7.2, 7.3, 7.5_
+  - [ ] 6.2 Implement synchronized video playback
+    - Synchronize play/pause state across both video players
+    - Implement seek synchronization when user drags scrubber
+    - Handle video loading states for both players
+    - Ensure both videos start from same timestamp
+    - Add playback speed control (optional)
+    - _Requirements: 5.3_
+  - [ ] 6.3 Implement pose landmark overlay rendering
+    - Draw detected pose landmarks on both videos during playback
+    - Use canvas or SVG overlay for landmark visualization
+    - Connect landmarks with lines to show skeleton structure
+    - Update landmark positions based on current video frame
+    - Use different colors for user vs gold standard landmarks
+    - _Requirements: 5.4_
+  - [ ] 6.4 Add segment highlighting based on feedback selection
+    - Accept highlightedSegments prop from results screen
+    - Highlight specific body segments (shoulder, elbow, etc.) in different color
+    - Update highlighting when user taps feedback issue
+    - Make highlighted landmarks more prominent (larger, brighter)
+    - _Requirements: 5.5_
+  - [ ] 6.5 Create comparison screen route with dynamic ID parameter
+    - Implement `app/comparison/[id].tsx` with useLocalSearchParams
+    - Load analysis data by ID from StorageService
+    - Pass video URIs and landmarks to ComparisonViewer component
+    - Add back navigation to results screen
+    - Handle missing analysis data gracefully
+    - _Requirements: 6.1, 6.2, 6.3_
+
+- [ ] 7. Implement error handling and validation
+  - [ ] 7.1 Add video validation with user-friendly error messages
+    - Validate video format (mp4, mov) before processing
+    - Check video duration (max 60 seconds)
+    - Display error modal with clear message and retry option using Gluestack UI AlertDialog
+    - Handle corrupted or unreadable video files
+    - _Requirements: 8.1, 8.4_
+  - [ ] 7.2 Implement pose detection error handling
+    - Handle model loading failures with troubleshooting message
+    - Continue processing if individual frames fail (log errors)
+    - Show warning if less than 50% of frames processed successfully
+    - Display "No person detected" error if BlazePose finds no poses
+    - _Requirements: 2.5, 8.1, 8.5_
+  - [ ] 7.3 Add storage and network error handling
+    - Check available storage before saving videos or analyses
+    - Prompt user to free space if insufficient storage detected
+    - Handle network errors when loading BlazePose model from CDN
+    - Offer offline mode with bundled model as fallback
+    - _Requirements: 8.2, 8.3_
+  - [ ] 7.4 Create AnalysisError class and error type enum
+    - Define AnalysisErrorType enum with all error types
+    - Create AnalysisError class extending Error with type and recoverable properties
+    - Use throughout services for consistent error handling
+    - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
+
+- [ ]* 8. Add polish, optimization, and testing
+  - [ ]* 8.1 Optimize frame extraction and pose detection performance
+    - Reduce frame extraction rate to 10 FPS for faster processing
+    - Use lower resolution (640x480) for pose detection
+    - Implement frame batching to avoid memory spikes
+    - Add frame skipping for videos longer than 30 seconds
+  - [ ]* 8.2 Implement memory management and cleanup
+    - Dispose pose detector when leaving processing screen
+    - Clear frame buffers after processing complete
+    - Use React.memo for expensive components (ComparisonViewer, FeedbackDisplay)
+    - Implement proper cleanup in useEffect hooks
+  - [ ]* 8.3 Add animations and transitions
+    - Add screen transition animations using React Native Reanimated
+    - Animate progress indicator and score display
+    - Add smooth landmark overlay animations in comparison viewer
+    - Implement gesture-based interactions where appropriate
+  - [ ]* 8.4 Create analysis history tab
+    - Add history tab to tab navigator showing saved analyses
+    - Display list of past analyses with thumbnails and scores
+    - Implement tap to view saved analysis results
+    - Add swipe-to-delete functionality for removing analyses
+  - [ ]* 8.5 Write unit tests for core services
+    - Test PoseDetectionService initialization and frame processing
+    - Test AnalysisService angle calculation and deviation scoring
+    - Test VideoProcessingService frame extraction and validation
+    - Test StorageService CRUD operations

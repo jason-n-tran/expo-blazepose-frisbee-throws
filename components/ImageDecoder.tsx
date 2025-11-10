@@ -75,43 +75,71 @@ async function decodeImageWithGL(
   height: number
 ): Promise<Uint8Array> {
   console.log('[ImageDecoder] Decoding image:', imageUri);
+  console.log('[ImageDecoder] Target dimensions:', width, 'x', height);
   
-  // Create texture
-  const texture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, texture);
+  // The issue: texImage2D with { localUri } doesn't actually load the image synchronously
+  // We need to use expo-image-manipulator to get actual pixel data
+  const ImageManipulator = require('expo-image-manipulator');
   
-  // Set texture parameters
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-
-  // Load image into texture
-  // expo-gl's texImage2D accepts { localUri } for file:// URIs
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, { localUri: imageUri });
-
-  // Create framebuffer
-  const framebuffer = gl.createFramebuffer();
-  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-  gl.framebufferTexture2D(
-    gl.FRAMEBUFFER,
-    gl.COLOR_ATTACHMENT0,
-    gl.TEXTURE_2D,
-    texture,
-    0
-  );
-
-  // Read pixels
-  const pixels = new Uint8Array(width * height * 4);
-  gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-
-  // Cleanup
-  gl.deleteTexture(texture);
-  gl.deleteFramebuffer(framebuffer);
-  gl.flush();
-
-  console.log('[ImageDecoder] Image decoded successfully');
-  return pixels;
+  try {
+    // Resize and get the image
+    const manipResult = await ImageManipulator.manipulateAsync(
+      imageUri,
+      [{ resize: { width, height } }],
+      { format: ImageManipulator.SaveFormat.PNG }
+    );
+    
+    console.log('[ImageDecoder] Image manipulated:', manipResult.uri);
+    
+    // Now load this into GL texture
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    
+    // Load the manipulated image
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, { localUri: manipResult.uri });
+    
+    // Wait for texture upload
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
+    // Create framebuffer
+    const framebuffer = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+    
+    const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+    console.log('[ImageDecoder] Framebuffer status:', status === gl.FRAMEBUFFER_COMPLETE ? 'COMPLETE' : status);
+    
+    // Read pixels
+    const pixels = new Uint8Array(width * height * 4);
+    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    
+    // Check data
+    let nonZeroCount = 0;
+    for (let i = 0; i < pixels.length; i++) {
+      if (pixels[i] !== 0) nonZeroCount++;
+    }
+    console.log('[ImageDecoder] Non-zero pixels:', nonZeroCount, '/', pixels.length);
+    console.log('[ImageDecoder] First 20 values:', Array.from(pixels.slice(0, 20)));
+    
+    // Cleanup
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.deleteTexture(texture);
+    gl.deleteFramebuffer(framebuffer);
+    gl.flush();
+    
+    // Clean up temp file - skip cleanup to avoid deprecated API error
+    // The temp files will be cleaned up by the system eventually
+    
+    return pixels;
+  } catch (error) {
+    console.error('[ImageDecoder] Error:', error);
+    throw error;
+  }
 }
 
 const styles = StyleSheet.create({

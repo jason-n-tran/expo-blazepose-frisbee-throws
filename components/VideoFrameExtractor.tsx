@@ -50,8 +50,12 @@ export const VideoFrameExtractor = forwardRef<VideoFrameExtractorRef, Props>((pr
         console.log(`[VideoFrameExtractor] Seeking to ${timestamp}ms`);
         player.currentTime = timestamp / 1000;
         
+        // Pause to ensure frame is stable
+        player.pause();
+        
         // Wait for seek to complete and frame to render
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Give it plenty of time to actually render the frame
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         // Capture the frame
         if (!viewRef.current) {
@@ -62,6 +66,8 @@ export const VideoFrameExtractor = forwardRef<VideoFrameExtractorRef, Props>((pr
           format: 'png',
           quality: 1,
           result: 'tmpfile',
+          width,
+          height,
         });
 
         console.log(`[VideoFrameExtractor] Frame captured to: ${capturedUri}`);
@@ -124,12 +130,9 @@ async function waitForPlayerReady(player: any): Promise<void> {
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
-    left: -10000, // Hide off-screen
-    top: -10000,
     width: 640,
     height: 480,
-    opacity: 0,
+    backgroundColor: '#000',
   },
   videoContainer: {
     width: 640,
@@ -138,7 +141,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   video: {
-    width: '100%',
-    height: '100%',
+    width: 640,
+    height: 480,
   },
 });

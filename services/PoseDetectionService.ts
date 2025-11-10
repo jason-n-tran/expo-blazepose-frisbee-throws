@@ -133,7 +133,16 @@ export class PoseDetectionService {
         tensor = rgbaTensor.slice([0, 0, 0], [height, width, 3]) as tf.Tensor3D;
         rgbaTensor.dispose();
         
+        console.log('[PoseDetectionService] Tensor shape:', tensor.shape);
+        console.log('[PoseDetectionService] Tensor dtype:', tensor.dtype);
+        console.log('[PoseDetectionService] Tensor min/max:', await tensor.min().data(), await tensor.max().data());
+        
         poses = await this.detector.estimatePoses(tensor);
+        console.log('[PoseDetectionService] Poses detected:', poses?.length || 0);
+        if (poses && poses.length > 0) {
+          console.log('[PoseDetectionService] First pose keypoints:', poses[0].keypoints?.length || 0);
+          console.log('[PoseDetectionService] First pose score:', poses[0].score);
+        }
         tensor.dispose();
       } else {
         // Other types - pass directly

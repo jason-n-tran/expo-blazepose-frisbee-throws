@@ -1,82 +1,65 @@
 /**
  * PoseDetectionService
  * 
- * Service for detecting human poses in video frames using Google MediaPipe BlazePose.
+ * Service for detecting human poses in video frames using TensorFlow.js MoveNet.
  * Handles model initialization, frame processing, and resource cleanup.
+ * Compatible with React Native.
  */
 
-import { FilesetResolver, PoseLandmarker, PoseLandmarkerResult } from '@mediapipe/tasks-vision';
+import * as tf from '@tensorflow/tfjs';
+import * as poseDetection from '@tensorflow-models/pose-detection';
 import { NormalizedLandmark, PoseLandmarkData, AnalysisError, AnalysisErrorType } from '@/types/pose';
+import { Platform } from 'react-native';
 
 export class PoseDetectionService {
-  private poseLandmarker: PoseLandmarker | null = null;
+  private detector: poseDetection.PoseDetector | null = null;
   private isInitialized: boolean = false;
 
   /**
-   * Initialize the PoseLandmarker with BlazePose model
-   * Loads WASM files and model from CDN
-   * @param useOfflineModel - If true, attempt to use bundled model instead of CDN
+   * Initialize the PoseDetector with MoveNet model
+   * Loads TensorFlow.js and MoveNet model
+   * @param useOfflineModel - Ignored for now, kept for API compatibility
    */
   async initialize(useOfflineModel: boolean = false): Promise<void> {
     try {
-      // Initialize FilesetResolver for vision tasks
-      let vision;
+      console.log('[PoseDetectionService] Initializing TensorFlow.js...');
+      
+      // Wait for TensorFlow.js to be ready
+      await tf.ready();
+      console.log('[PoseDetectionService] TensorFlow.js ready');
+
+      // Create MoveNet detector
+      // Using MoveNet Lightning for faster inference (suitable for mobile)
       try {
-        vision = await FilesetResolver.forVisionTasks(
-          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
+        console.log('[PoseDetectionService] Loading MoveNet model...');
+        this.detector = await poseDetection.createDetector(
+          poseDetection.SupportedModels.MoveNet,
+          {
+            modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+            enableSmoothing: true,
+            minPoseScore: 0.25,
+          }
         );
+        console.log('[PoseDetectionService] MoveNet model loaded successfully');
       } catch (error) {
-        // Network error loading WASM files
+        console.error('[PoseDetectionService] Failed to load MoveNet model:', error);
         throw new AnalysisError(
-          AnalysisErrorType.NETWORK_ERROR,
-          'Failed to load pose detection resources. Please check your internet connection.',
+          AnalysisErrorType.MODEL_LOAD_FAILED,
+          'Failed to load pose detection model. Please check your internet connection.',
           true
         );
       }
 
-      // Create PoseLandmarker with BlazePose Lite model
-      try {
-        this.poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath: useOfflineModel
-              ? '/assets/pose_landmarker_lite.task' // Bundled model path
-              : 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task',
-            delegate: 'GPU', // Use GPU acceleration if available
-          },
-          runningMode: 'VIDEO',
-          numPoses: 1, // Detect single person
-          minPoseDetectionConfidence: 0.5,
-          minPosePresenceConfidence: 0.5,
-          minTrackingConfidence: 0.5,
-        });
-      } catch (error) {
-        // Model loading error
-        if (!useOfflineModel) {
-          // Try offline model as fallback
-          console.warn('Failed to load model from CDN, attempting offline model...');
-          throw new AnalysisError(
-            AnalysisErrorType.NETWORK_ERROR,
-            'Failed to download pose detection model. Please check your internet connection.',
-            true
-          );
-        } else {
-          throw new AnalysisError(
-            AnalysisErrorType.MODEL_LOAD_FAILED,
-            'Failed to load pose detection model. Please restart the app.',
-            false
-          );
-        }
-      }
-
       this.isInitialized = true;
-      console.log('PoseDetectionService initialized successfully');
+      console.log('[PoseDetectionService] Initialization complete');
     } catch (error) {
+      console.error('[PoseDetectionService] Initialization error:', error);
       if (error instanceof AnalysisError) {
         throw error;
       }
       throw new AnalysisError(
         AnalysisErrorType.MODEL_LOAD_FAILED,
-        `Failed to initialize BlazePose model: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to initialize pose detection: ${error instanceof Error ? error.message : 'Unknown error'}`,
         false
       );
     }
@@ -84,15 +67,15 @@ export class PoseDetectionService {
 
   /**
    * Detect pose landmarks in a single video frame
-   * @param imageData - Frame image data
+   * @param imageData - Frame image data or tensor
    * @param timestamp - Frame timestamp in milliseconds
    * @returns Array of normalized landmarks or null if no pose detected
    */
   async detectPoseInFrame(
-    imageData: ImageData,
+    imageData: ImageData | tf.Tensor3D,
     timestamp: number
   ): Promise<NormalizedLandmark[] | null> {
-    if (!this.isInitialized || !this.poseLandmarker) {
+    if (!this.isInitialized || !this.detector) {
       throw new AnalysisError(
         AnalysisErrorType.POSE_DETECTION_FAILED,
         'PoseDetectionService not initialized. Call initialize() first.',
@@ -101,32 +84,42 @@ export class PoseDetectionService {
     }
 
     try {
-      // Create HTMLCanvasElement from ImageData for MediaPipe
-      const canvas = document.createElement('canvas');
-      canvas.width = imageData.width;
-      canvas.height = imageData.height;
-      const ctx = canvas.getContext('2d');
+      let tensor: tf.Tensor3D;
       
-      if (!ctx) {
-        throw new Error('Failed to get canvas context');
+      // Convert ImageData to tensor if needed
+      if (imageData instanceof ImageData) {
+        // Create tensor from ImageData
+        const { width, height, data } = imageData;
+        tensor = tf.browser.fromPixels({ width, height, data } as any);
+      } else {
+        tensor = imageData;
       }
 
-      ctx.putImageData(imageData, 0, 0);
+      // Detect poses
+      const poses = await this.detector.estimatePoses(tensor);
 
-      // Detect pose landmarks
-      const result: PoseLandmarkerResult = this.poseLandmarker.detectForVideo(
-        canvas,
-        timestamp
-      );
+      // Clean up tensor if we created it
+      if (imageData instanceof ImageData) {
+        tensor.dispose();
+      }
 
       // Check if any poses were detected
-      if (!result.landmarks || result.landmarks.length === 0) {
+      if (!poses || poses.length === 0 || !poses[0].keypoints) {
         return null;
       }
 
-      // Return the first detected pose landmarks
-      return result.landmarks[0] as NormalizedLandmark[];
+      // Convert MoveNet keypoints to MediaPipe-style normalized landmarks
+      const pose = poses[0];
+      const landmarks: NormalizedLandmark[] = pose.keypoints.map((kp) => ({
+        x: kp.x || 0,
+        y: kp.y || 0,
+        z: 0, // MoveNet doesn't provide z coordinate
+        visibility: kp.score || 0,
+      }));
+
+      return landmarks;
     } catch (error) {
+      console.error('[PoseDetectionService] Frame detection error:', error);
       throw new AnalysisError(
         AnalysisErrorType.POSE_DETECTION_FAILED,
         `Failed to detect pose in frame: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -148,7 +141,7 @@ export class PoseDetectionService {
     videoProcessingService: any, // VideoProcessingService type
     onProgress?: (progress: number) => void
   ): Promise<PoseLandmarkData[]> {
-    if (!this.isInitialized || !this.poseLandmarker) {
+    if (!this.isInitialized || !this.detector) {
       throw new AnalysisError(
         AnalysisErrorType.POSE_DETECTION_FAILED,
         'PoseDetectionService not initialized. Call initialize() first.',
@@ -230,7 +223,7 @@ export class PoseDetectionService {
     frames: { index: number; timestamp: number; imageData: ImageData }[],
     onProgress?: (progress: number) => void
   ): Promise<PoseLandmarkData[]> {
-    if (!this.isInitialized || !this.poseLandmarker) {
+    if (!this.isInitialized || !this.detector) {
       throw new AnalysisError(
         AnalysisErrorType.POSE_DETECTION_FAILED,
         'PoseDetectionService not initialized. Call initialize() first.',
@@ -300,14 +293,15 @@ export class PoseDetectionService {
   }
 
   /**
-   * Clean up resources and dispose of the pose landmarker
+   * Clean up resources and dispose of the pose detector
    */
   dispose(): void {
-    if (this.poseLandmarker) {
-      this.poseLandmarker.close();
-      this.poseLandmarker = null;
+    if (this.detector) {
+      this.detector.dispose();
+      this.detector = null;
     }
     this.isInitialized = false;
+    console.log('[PoseDetectionService] Resources disposed');
   }
 
   /**

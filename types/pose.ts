@@ -205,9 +205,9 @@ export { AnalysisError, AnalysisErrorType } from './errors';
  * Video frame with extracted image data
  */
 export interface VideoFrame {
-  index: number;        // Frame index
-  timestamp: number;    // Timestamp in milliseconds
-  imageData: ImageData; // Frame image data
+  index: number;                                                    // Frame index
+  timestamp: number;                                                // Timestamp in milliseconds
+  imageData: ImageData | string | { uri: string; width: number; height: number };  // Frame image data, URI, or frame info
 }
 
 /**

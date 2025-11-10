@@ -6,15 +6,16 @@
  */
 
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Button, ButtonText } from '@/components/ui/button';
 import { Progress, ProgressFilledTrack } from '@/components/ui/progress';
 import { ErrorDialog } from '@/components/ErrorDialog';
 import { PoseDetectionService } from '@/services/PoseDetectionService';
 import { VideoProcessingService } from '@/services/VideoProcessingService';
+import { VideoFrameExtractor, VideoFrameExtractorRef } from '@/components/VideoFrameExtractor';
+import { ImageDecoder, ImageDecoderRef } from '@/components/ImageDecoder';
 import { AnalysisError, AnalysisErrorType } from '@/types/errors';
-import { PoseLandmarkData } from '@/types/pose';
 
 export default function ProcessingScreen() {
   const router = useRouter();
@@ -36,6 +37,8 @@ export default function ProcessingScreen() {
 
   const poseDetectionService = useRef(new PoseDetectionService());
   const videoProcessingService = useRef(new VideoProcessingService());
+  const frameExtractorRef = useRef<VideoFrameExtractorRef>(null);
+  const imageDecoderRef = useRef<ImageDecoderRef>(null);
   const startTime = useRef<number>(Date.now());
 
   useEffect(() => {
@@ -43,8 +46,16 @@ export default function ProcessingScreen() {
     
     if (!videoUri) {
       console.error('[ProcessingScreen] No video URI provided!');
-      setError('No video selected');
+      setError(new Error('No video selected'));
       return;
+    }
+
+    // Set frame extractor and image decoder references
+    if (frameExtractorRef.current) {
+      videoProcessingService.current.setFrameExtractor(frameExtractorRef.current);
+    }
+    if (imageDecoderRef.current) {
+      poseDetectionService.current.setImageDecoder(imageDecoderRef.current);
     }
 
     console.log('[ProcessingScreen] Starting video processing...');
@@ -217,6 +228,12 @@ export default function ProcessingScreen() {
           </Button>
         </View>
       </View>
+
+      {/* Hidden video frame extractor component */}
+      <VideoFrameExtractor ref={frameExtractorRef} />
+      
+      {/* Hidden image decoder component */}
+      <ImageDecoder ref={imageDecoderRef} />
 
       <ErrorDialog
         isOpen={showErrorDialog}

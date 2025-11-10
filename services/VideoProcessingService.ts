@@ -13,6 +13,15 @@ export class VideoProcessingService {
   private static readonly MAX_VIDEO_DURATION = 60; // seconds
   private static readonly SUPPORTED_FORMATS = ['mp4', 'mov'];
 
+  private frameExtractorRef: any = null;
+
+  /**
+   * Set the frame extractor reference (from VideoFrameExtractor component)
+   */
+  setFrameExtractor(ref: any) {
+    this.frameExtractorRef = ref;
+  }
+
   /**
    * Extract frames from a video at specified FPS
    * @param videoUri - URI of the video file
@@ -20,6 +29,10 @@ export class VideoProcessingService {
    * @returns Array of video frames with image data
    */
   async extractFrames(videoUri: string, fps: number = 10): Promise<VideoFrame[]> {
+    console.log('[VideoProcessingService] extractFrames called');
+    console.log('[VideoProcessingService] Video URI:', videoUri);
+    console.log('[VideoProcessingService] FPS:', fps);
+    
     try {
       // Validate video first
       const validation = await this.validateVideo(videoUri);
@@ -31,38 +44,62 @@ export class VideoProcessingService {
         );
       }
 
+      if (!this.frameExtractorRef) {
+        throw new AnalysisError(
+          AnalysisErrorType.VIDEO_LOAD_FAILED,
+          'Frame extractor not initialized. Please ensure VideoFrameExtractor component is mounted.',
+          true
+        );
+      }
+
       const duration = validation.duration!;
       const frames: VideoFrame[] = [];
       const frameInterval = 1000 / fps; // milliseconds between frames
       const totalFrames = Math.floor(duration * fps);
 
-      // Create a video element for frame extraction
-      // Note: This is a simplified implementation
-      // In React Native, we'll need to use a different approach with expo-video
-      // or native modules for actual frame extraction
-      
+      console.log('[VideoProcessingService] Duration:', duration, 'seconds');
+      console.log('[VideoProcessingService] Total frames to extract:', totalFrames);
+      console.log('[VideoProcessingService] Frame interval:', frameInterval, 'ms');
+
+      // Extract frames using the VideoFrameExtractor component
       for (let i = 0; i < totalFrames; i++) {
         const timestamp = i * frameInterval;
         
-        // TODO: Implement actual frame extraction using expo-video or native module
-        // For now, this is a placeholder that shows the structure
-        // Real implementation would involve:
-        // 1. Seek to timestamp
-        // 2. Capture current frame as image
-        // 3. Convert to ImageData
+        console.log(`[VideoProcessingService] Extracting frame ${i + 1}/${totalFrames} at ${timestamp}ms`);
         
-        // Placeholder ImageData (will be replaced with actual extraction)
-        const imageData = new ImageData(640, 480);
-        
-        frames.push({
-          index: i,
-          timestamp,
-          imageData,
-        });
+        try {
+          const frameInfo = await this.frameExtractorRef.extractFrame(
+            videoUri,
+            timestamp,
+            640, // width
+            480  // height
+          );
+          
+          frames.push({
+            index: i,
+            timestamp,
+            imageData: frameInfo, // Store frame info (URI + dimensions)
+          });
+          
+          console.log(`[VideoProcessingService] Frame ${i + 1} extracted successfully`);
+        } catch (frameError) {
+          console.warn(`[VideoProcessingService] Failed to extract frame ${i}:`, frameError);
+          // Continue with next frame instead of failing completely
+        }
       }
 
+      if (frames.length === 0) {
+        throw new AnalysisError(
+          AnalysisErrorType.VIDEO_LOAD_FAILED,
+          'Failed to extract any frames from video',
+          true
+        );
+      }
+
+      console.log(`[VideoProcessingService] Successfully extracted ${frames.length}/${totalFrames} frames`);
       return frames;
     } catch (error) {
+      console.error('[VideoProcessingService] Error in extractFrames:', error);
       if (error instanceof AnalysisError) {
         throw error;
       }
@@ -236,15 +273,22 @@ export class VideoProcessingService {
    */
   async extractFrameAtTimestamp(videoUri: string, timestamp: number): Promise<ImageData> {
     try {
-      // TODO: Implement frame extraction at specific timestamp
-      // This would involve:
-      // 1. Load video
-      // 2. Seek to timestamp
-      // 3. Capture frame
-      // 4. Convert to ImageData
+      if (!this.frameExtractorRef) {
+        throw new AnalysisError(
+          AnalysisErrorType.VIDEO_LOAD_FAILED,
+          'Frame extractor not initialized',
+          true
+        );
+      }
+
+      const imageData = await this.frameExtractorRef.extractFrame(
+        videoUri,
+        timestamp,
+        640,
+        480
+      );
       
-      // Placeholder
-      return new ImageData(640, 480);
+      return imageData;
     } catch (error) {
       throw new AnalysisError(
         AnalysisErrorType.VIDEO_LOAD_FAILED,
